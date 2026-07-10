@@ -1,0 +1,98 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}Alerts - Smart Pastoralism{% endblock %}
+
+{% block page_content %}
+<div>
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">🔔 Alerts</h1>
+        <p class="mt-2 text-sm text-gray-600">System alerts and notifications</p>
+    </div>
+
+    {% if alerts %}
+    <div class="space-y-4">
+        {% for alert in alerts %}
+        <div class="bg-white rounded-lg shadow-lg p-6 {% if 'CRITICAL' in alert.alert_type %}border-l-4 border-red-500{% elif 'WARNING' in alert.alert_type %}border-l-4 border-yellow-500{% else %}border-l-4 border-blue-500{% endif %}">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-2xl">
+                            {% if 'CRITICAL' in alert.alert_type %}
+                                🚨
+                            {% elif 'WARNING' in alert.alert_type %}
+                                ⚠️
+                            {% else %}
+                                ℹ️
+                            {% endif %}
+                        </span>
+                        <div>
+                            <span class="font-bold text-lg">{{ alert.alert_type }}</span>
+                            <span class="mx-2 text-gray-400">•</span>
+                            <span class="text-gray-700">{{ alert.device_id }}</span>
+                        </div>
+                    </div>
+                    
+                    <p class="mt-3 text-gray-700">{{ alert.alert_message }}</p>
+                    
+                    <div class="mt-3 flex space-x-6 text-sm text-gray-600">
+                        {% if alert.temperature %}
+                        <span>🌡️ {{ "%.1f"|format(alert.temperature) }}°C</span>
+                        {% endif %}
+                        {% if alert.heart_rate %}
+                        <span>❤️ {{ alert.heart_rate }} BPM</span>
+                        {% endif %}
+                        {% if alert.battery %}
+                        <span>🔋 {{ alert.battery }}%</span>
+                        {% endif %}
+                        <span>🕐 {{ alert.alert_time }}</span>
+                    </div>
+                </div>
+                
+                <div class="ml-6 flex flex-col space-y-2">
+                    {% if not alert.resolved %}
+                    <span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">
+                        Active
+                    </span>
+                    <button onclick="resolveAlert({{ alert.id }})" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
+                        Resolve
+                    </button>
+                    {% else %}
+                    <span class="px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-800">
+                        Resolved
+                    </span>
+                    {% endif %}
+                    
+                    <a href="/dashboard/animals/{{ alert.device_id }}" 
+                       class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm text-center">
+                        View Animal
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow-lg p-12 text-center">
+        <span class="text-6xl">✅</span>
+        <h3 class="mt-4 text-xl font-semibold text-gray-900">No Alerts</h3>
+        <p class="mt-2 text-gray-600">All animals are healthy!</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+async function resolveAlert(alertId) {
+    try {
+        const response = await fetch(`/api/alerts/${alertId}/resolve`, {
+            method: 'POST'
+        });
+        if (response.ok) {
+            location.reload();
+        }
+    } catch (error) {
+        console.error('Error resolving alert:', error);
+    }
+}
+</script>
+{% endblock %}

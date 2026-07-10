@@ -1,0 +1,751 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}Geofence Management - Smart Pastoralism{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+<style>
+    /* ... css remains ... */
+    #geofenceMap {
+        height: 100%;
+        width: 100%;
+        border-radius: 0.5rem;
+        background: #e5e7eb;
+        z-index: 1;
+    }
+
+    .leaflet-container {
+        height: 100%;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<!-- Leaflet + Leaflet.draw (compatible versions) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<div x-data="geofenceManager()" x-init="init()">
+    <div class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">🗺️ Geofence Management</h1>
+            <p class="mt-2 text-sm text-gray-600">Define virtual boundaries and monitor animal locations</p>
+        </div>
+        <button @click="showCreateForm = true"
+            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+            ➕ Create Geofence
+        </button>
+    </div>
+
+    <!-- Success/Error Messages -->
+    <div x-show="successMessage" x-transition class="bg-green-50 border-l-4 border-green-500 p-4 mb-6 rounded-lg">
+        <div class="flex items-center">
+            <span class="text-2xl mr-3">✅</span>
+            <p class="text-green-700" x-text="successMessage"></p>
+        </div>
+    </div>
+
+    <div x-show="errorMessage" x-transition class="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-lg">
+        <div class="flex items-center">
+            <span class="text-2xl mr-3">❌</span>
+            <p class="text-red-700" x-text="errorMessage"></p>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-blue-100 text-sm font-medium">Total Geofences</p>
+                    <p class="text-3xl font-bold mt-1" x-text="geofences.length"></p>
+                </div>
+                <span class="text-4xl opacity-80">🗺️</span>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-green-100 text-sm font-medium">Active Fences</p>
+                    <p class="text-3xl font-bold mt-1" x-text="geofences.filter(g => g.enabled).length"></p>
+                </div>
+                <span class="text-4xl opacity-80">✅</span>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-red-100 text-sm font-medium">Violations (24h)</p>
+                    <p class="text-3xl font-bold mt-1" x-text="violationsCount"></p>
+                </div>
+                <span class="text-4xl opacity-80">🚨</span>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-purple-100 text-sm font-medium">Total Coverage</p>
+                    <p class="text-3xl font-bold mt-1" x-text="totalCoverage + ' km²'"></p>
+                </div>
+                <span class="text-4xl opacity-80">📏</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map and Form Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Map -->
+        <div class="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">📍 Interactive Map</h3>
+                <button @click="startDrawing()"
+                    class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-medium transition flex items-center">
+                    <span class="mr-1">✏️</span> Draw Boundary
+                </button>
+            </div>
+
+            <!-- Map Container with Loading State -->
+            <!-- Map Container with Loading State -->
+            <div class="relative" style="height: 500px;">
+                <!-- Loading Spinner -->
+                <div x-show="!map"
+                    class="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-20">
+                    <div class="text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p class="text-gray-600">Loading map...</p>
+                    </div>
+                </div>
+
+                <!-- Actual Map Div -->
+                <div id="geofenceMap" class="w-full h-full rounded-lg z-10"></div>
+            </div>
+
+            <div class="mt-4 flex items-center justify-between text-sm text-gray-600">
+                <p>💡 Click on map to create geofence</p>
+                <p>🔵 Blue circles = Active | 🔴 Red circles = Inactive</p>
+            </div>
+        </div>
+
+        <!-- Create/Edit Form -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">
+                <span x-text="editingFence ? '✏️ Edit Geofence' : '➕ Create Geofence'"></span>
+            </h3>
+
+            <form @submit.prevent="saveGeofence()" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Fence Name</label>
+                    <input type="text" x-model="formData.name" required placeholder="e.g., North Pasture"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Center Latitude</label>
+                    <input type="number" step="any" x-model="formData.center_lat" required placeholder="e.g., 28.6139"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Center Longitude</label>
+                    <input type="number" step="any" x-model="formData.center_lng" required placeholder="e.g., 77.2090"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Radius (meters)</label>
+                    <input type="number" x-model="formData.radius_meters" required min="10" placeholder="e.g., 500"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">Current: <span
+                            x-text="(formData.radius_meters / 1000).toFixed(2)"></span> km</p>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" x-model="formData.enabled"
+                            class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">Enabled</span>
+                    </label>
+
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" x-model="formData.notification_enabled"
+                            class="w-5 h-5 text-purple-600 rounded focus:ring-purple-500">
+                        <span class="ml-2 text-sm text-gray-700">Send Alerts</span>
+                    </label>
+                </div>
+
+                <div class="flex gap-2">
+                    <button type="submit"
+                        class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        <span x-text="editingFence ? 'Update' : 'Create'"></span>
+                    </button>
+                    <button type="button" @click="cancelEdit()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Geofences Table -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <h3 class="text-lg font-semibold mb-4">📋 All Geofences</h3>
+
+        <div x-show="geofences.length === 0" class="text-center py-8 text-gray-400">
+            <span class="text-4xl">🗺️</span>
+            <p class="mt-2">No geofences created yet. Click "Create Geofence" to get started.</p>
+        </div>
+
+        <div x-show="geofences.length > 0" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Radius</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alerts</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="fence in geofences" :key="fence.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="fence.name"></td>
+                            <td class="px-4 py-3 text-sm text-gray-600">
+                                <span x-text="fence.center_lat.toFixed(4) + ', ' + fence.center_lng.toFixed(4)"></span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600">
+                                <span x-text="fence.radius_meters + ' m'"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full"
+                                    :class="fence.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
+                                    x-text="fence.enabled ? 'Active' : 'Inactive'"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full"
+                                    :class="fence.notification_enabled ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'"
+                                    x-text="fence.notification_enabled ? 'On' : 'Off'"></span>
+                            </td>
+                            <td class="px-4 py-3 text-sm space-x-2">
+                                <button @click="editFence(fence)"
+                                    class="text-blue-600 hover:text-blue-800">Edit</button>
+                                <button @click="deleteFence(fence.id)"
+                                    class="text-red-600 hover:text-red-800">Delete</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Recent Violations -->
+    <div class="mt-8 bg-white rounded-lg shadow-lg p-6">
+        <h3 class="text-lg font-semibold mb-4">🚨 Recent Violations</h3>
+
+        <div x-show="violations.length === 0" class="text-center py-8 text-gray-400">
+            <span class="text-4xl">✅</span>
+            <p class="mt-2">No geofence violations detected</p>
+        </div>
+
+        <div x-show="violations.length > 0" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Geofence</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Distance Out</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alert Sent</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="v in violations.slice(0, 10)" :key="v.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 text-sm text-gray-600"
+                                x-text="new Date(v.violated_at).toLocaleString()"></td>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="v.device_id"></td>
+                            <td class="px-4 py-3 text-sm text-gray-600" x-text="v.geofence_name"></td>
+                            <td class="px-4 py-3 text-sm text-orange-600"
+                                x-text="Math.round(v.distance_from_fence) + ' m'"></td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full"
+                                    :class="v.alert_sent ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
+                                    x-text="v.alert_sent ? 'Yes' : 'No'"></span>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    function geofenceManager() {
+        return {
+            map: null,
+            geofences: [],
+            violations: [],
+            violationsCount: 0,
+            totalCoverage: 0,
+            successMessage: '',
+            errorMessage: '',
+            editingFence: null,
+            showCreateForm: false,
+            formData: {
+                name: '',
+                center_lat: 0,
+                center_lng: 0,
+                radius_meters: 500,
+                enabled: true,
+                notification_enabled: true
+            },
+            circles: [],
+
+            isDrawing: false, // Track drawing state
+
+            async init() {
+                // Wait for Leaflet to load
+                await this.waitForLeaflet();
+                this.initMap();
+                await this.loadGeofences();
+                await this.loadViolations();
+            },
+
+            async waitForLeaflet() {
+                // Poll for Leaflet AND Leaflet.Draw availability
+                return new Promise((resolve) => {
+                    if (typeof L !== 'undefined' && L.Control && L.Control.Draw) {
+                        resolve();
+                        return;
+                    }
+
+                    const checkInterval = setInterval(() => {
+                        if (typeof L !== 'undefined' && L.Control && L.Control.Draw) {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 100);
+
+                    // Timeout after 10 seconds
+                    setTimeout(() => {
+                        clearInterval(checkInterval);
+                        if (typeof L === 'undefined' || !L.Control.Draw) {
+                            console.warn('Leaflet Draw not loaded, some features may be disabled');
+                        }
+                        resolve(); // Resolve anyway to show basic map
+                    }, 10000);
+                });
+            },
+
+            initMap() {
+                try {
+                    // Check if Leaflet is available
+                    if (typeof L === 'undefined') {
+                        throw new Error('Leaflet library not loaded');
+                    }
+
+                    // Check if map container exists
+                    const container = document.getElementById('geofenceMap');
+                    if (!container) {
+                        throw new Error('Map container not found');
+                    }
+
+                    // FIX: Check if map is already initialized and clean up
+                    if (this.map) {
+                        this.map.remove();
+                        this.map = null;
+                    }
+
+                    // Double check container state (Alpine re-init protection)
+                    if (container._leaflet_id) {
+                        container._leaflet_id = null;
+                    }
+
+                    // Initialize map with default location
+                    this.map = L.map('geofenceMap').setView([28.6139, 77.2090], 13);
+
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(this.map);
+
+                    // --- DRAWING TOOLS START ---
+                    try {
+                        if (L.Control && L.Control.Draw) {
+                            this.drawnItems = new L.FeatureGroup();
+                            this.map.addLayer(this.drawnItems);
+
+                            // Initialize Draw Control (Toolbar)
+                            const drawControl = new L.Control.Draw({
+                                draw: {
+                                    polygon: {
+                                        allowIntersection: false,
+                                        showArea: true,
+                                        shapeOptions: { color: '#3b82f6' }
+                                    },
+                                    rectangle: true,
+                                    circle: true,
+                                    marker: false,
+                                    circlemarker: false,
+                                    polyline: false
+                                },
+                                edit: {
+                                    featureGroup: this.drawnItems,
+                                    remove: true
+                                }
+                            });
+                            this.map.addControl(drawControl);
+
+                            // Event: Shape Created
+                            this.map.on(L.Draw.Event.CREATED, (e) => {
+                                const layer = e.layer;
+                                const type = e.layerType;
+
+                                this.drawnItems.clearLayers();
+                                this.drawnItems.addLayer(layer);
+
+                                if (type === 'circle') {
+                                    const center = layer.getLatLng();
+                                    this.formData.center_lat = center.lat;
+                                    this.formData.center_lng = center.lng;
+                                    this.formData.radius_meters = Math.round(layer.getRadius());
+                                    this.formData.shape_type = 'circle';
+                                }
+                                else if (type === 'polygon' || type === 'rectangle') {
+                                    const center = layer.getBounds().getCenter();
+                                    const corner = layer.getBounds().getNorthEast();
+                                    const radius = center.distanceTo(corner);
+
+                                    this.formData.center_lat = center.lat;
+                                    this.formData.center_lng = center.lng;
+                                    this.formData.radius_meters = Math.round(radius);
+
+                                    const latlngs = layer.getLatLngs()[0];
+                                    this.formData.coordinates = latlngs.map(ll => [ll.lat, ll.lng]);
+                                    this.formData.shape_type = type;
+
+                                    console.log("📍 Shape drawn:", this.formData.coordinates);
+                                }
+                            });
+
+                            // Event: Drawing Started/Stopped
+                            this.map.on(L.Draw.Event.DRAWSTART, () => { this.isDrawing = true; });
+                            this.map.on(L.Draw.Event.DRAWSTOP, () => { this.isDrawing = false; });
+
+                            console.log('✅ Drawing tools initialized');
+                        } else {
+                            console.warn('⚠️ Leaflet Draw library not found. Drawing disabled.');
+                        }
+                    } catch (drawError) {
+                        console.error('⚠️ Drawing tools failed to init:', drawError);
+                        // Continue execution - do not crash map
+                    }
+
+                    // Simple Click Handler (Only if NOT drawing)
+                    this.map.on('click', (e) => {
+                        // Check if drawing is active via class on map container
+                        const isDrawingActive = this.map.getContainer().classList.contains('leaflet-draw-toolbar-top');
+                        // Note: Leaflet Draw usually adds classes like 'leaflet-draw-section' or cursor styles
+
+                        // Robust check: If 'isDrawing' flag is true OR any draw handler is enabled
+                        if (this.isDrawing) return;
+
+                        // Another check: If user clicked the "Draw Boundary" button recently
+
+                        console.log('📍 Map clicked (Simple Mode):', e.latlng);
+                        this.formData.center_lat = e.latlng.lat;
+                        this.formData.center_lng = e.latlng.lng;
+                        this.formData.shape_type = 'circle';
+                        // this.formData.radius_meters = 500; // Keep user preference
+
+                        // Clear previous layers unless it's the one we just drew
+                        if (!this.isDrawing) {
+                            this.drawnItems && this.drawnItems.clearLayers();
+                        }
+                        this.updateMapPreview();
+                    });
+                    // --- DRAWING TOOLS END ---
+
+                    // Force map to recognize container size
+                    setTimeout(() => {
+                        if (this.map) {
+                            this.map.invalidateSize();
+                        }
+                    }, 100);
+
+                    console.log('✅ Map initialized with Drawing Tools');
+                } catch (error) {
+                    console.error('❌ Map initialization error:', error);
+                    this.showError('Failed to initialize map. Please refresh the page.');
+                }
+            },
+
+            // Helper to start Polygon drawing programmatically
+            startDrawing() {
+                if (!this.map) return;
+
+                // Debugging Leaflet Draw availability
+                if (typeof L.Draw === 'undefined') {
+                    console.error('L.Draw is undefined. Available L keys:', Object.keys(L));
+                    this.showError('Drawing tools not fully loaded yet. Please wait...');
+                    return;
+                }
+
+                try {
+                    // Method 1: Programmatic (Standard)
+                    if (L.Draw && L.Draw.Polygon) {
+                        const polygonDrawer = new L.Draw.Polygon(this.map, {
+                            allowIntersection: false,
+                            showArea: true,
+                            shapeOptions: { color: '#3b82f6' }
+                        });
+                        polygonDrawer.enable();
+                        this.isDrawing = true;
+                        this.showSuccess('Click map to place points. Click start point to finish.');
+                        return;
+                    }
+
+                    throw new Error('L.Draw.Polygon not available');
+                } catch (error) {
+                    console.warn('Standard drawing init failed, trying fallback:', error);
+
+                    // Method 2: DOM Fallback (Click the button)
+                    const toolbarBtn = document.querySelector('.leaflet-draw-draw-polygon');
+                    if (toolbarBtn) {
+                        toolbarBtn.click();
+                        this.isDrawing = true;
+                        this.showSuccess('Drawing tool activated from toolbar.');
+                    } else {
+                        console.error('Fallback failed: Toolbar button not found');
+                        this.showError('Could not activate drawing tool. Please use the pentagon icon on the map.');
+                    }
+                }
+            },
+
+            async loadGeofences() {
+                try {
+                    // Load from localStorage
+                    const saved = localStorage.getItem('smartpastoral_geofences');
+                    if (saved) {
+                        this.geofences = JSON.parse(saved);
+                        console.log('📍 Loaded', this.geofences.length, 'geofences from storage');
+                    } else {
+                        this.geofences = [];
+                    }
+
+                    this.drawGeofences();
+                    this.calculateCoverage();
+                } catch (error) {
+                    console.error('Error loading geofences:', error);
+                    this.geofences = [];
+                }
+            },
+
+            // Save geofences to localStorage
+            saveToStorage() {
+                try {
+                    const dataToSave = JSON.stringify(this.geofences);
+                    localStorage.setItem('smartpastoral_geofences', dataToSave);
+                    console.log('💾 Saved', this.geofences.length, 'geofences to storage');
+                    console.log('💾 Data:', dataToSave);
+
+                    // Verify it was saved
+                    const verify = localStorage.getItem('smartpastoral_geofences');
+                    if (verify) {
+                        console.log('✅ Storage verified:', JSON.parse(verify).length, 'items');
+                    }
+                } catch (error) {
+                    console.error('❌ Error saving geofences:', error);
+                    alert('Error saving: ' + error.message);
+                }
+            },
+
+            async loadViolations() {
+                try {
+                    this.violations = [];
+                    this.violationsCount = 0;
+
+                    // Example: Uncomment when backend ready
+                    // const response = await fetch('/api/geofence-violations?hours=24');
+                    // const data = await response.json();
+                    // this.violations = data.violations || [];
+                    // this.violationsCount = this.violations.length;
+                } catch (error) {
+                    console.error('Error loading violations:', error);
+                }
+            },
+
+            drawGeofences() {
+                // Clear existing layers
+                this.circles.forEach(c => this.map.removeLayer(c));
+                this.circles = [];
+
+                // Draw each geofence
+                this.geofences.forEach(fence => {
+                    let layer;
+                    const color = fence.enabled ? '#3b82f6' : '#ef4444';
+                    const options = {
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.2
+                    };
+
+                    if (fence.shape_type === 'polygon' && fence.coordinates) {
+                        // Draw Polygon
+                        layer = L.polygon(fence.coordinates, options);
+                    } else if (fence.shape_type === 'rectangle' && fence.coordinates) {
+                        // Draw Rectangle
+                        layer = L.rectangle(fence.coordinates, options);
+                    } else {
+                        // Default to Circle
+                        layer = L.circle([fence.center_lat, fence.center_lng], {
+                            ...options,
+                            radius: fence.radius_meters
+                        });
+                    }
+
+                    layer.addTo(this.map);
+                    layer.bindPopup(`<b>${fence.name}</b><br>Type: ${fence.shape_type || 'Circle'}`);
+                    this.circles.push(layer);
+                });
+
+                // Fit bounds if geofences exist
+                if (this.circles.length > 0) {
+                    const group = new L.featureGroup(this.circles);
+                    this.map.fitBounds(group.getBounds().pad(0.1));
+                }
+            },
+
+            updateMapPreview() {
+                if (this.formData.center_lat && this.formData.center_lng && this.formData.radius_meters) {
+                    // Clear preview circle
+                    if (this.previewCircle) {
+                        this.map.removeLayer(this.previewCircle);
+                    }
+
+                    // Draw preview
+                    this.previewCircle = L.circle([this.formData.center_lat, this.formData.center_lng], {
+                        radius: this.formData.radius_meters,
+                        color: '#22c55e',
+                        fillColor: '#22c55e',
+                        fillOpacity: 0.3,
+                        dashArray: '5, 5'
+                    }).addTo(this.map);
+
+                    this.map.setView([this.formData.center_lat, this.formData.center_lng], 14);
+                }
+            },
+
+            calculateCoverage() {
+                let total = 0;
+                this.geofences.forEach(fence => {
+                    // Area = π * r²
+                    const area = Math.PI * Math.pow(fence.radius_meters / 1000, 2);
+                    total += area;
+                });
+                this.totalCoverage = total.toFixed(2);
+            },
+
+            async saveGeofence() {
+                try {
+                    // Validate
+                    if (!this.formData.name || this.formData.center_lat === '' || this.formData.center_lng === '') {
+                        this.showError('Please fill all required fields (click on map to set location)');
+                        return;
+                    }
+
+                    // For demo, just add to local array
+                    if (this.editingFence) {
+                        const index = this.geofences.findIndex(f => f.id === this.editingFence.id);
+                        this.geofences[index] = { ...this.formData, id: this.editingFence.id };
+                        this.showSuccess('Geofence updated successfully!');
+                    } else {
+                        const newFence = { ...this.formData, id: Date.now() };
+                        this.geofences.push(newFence);
+                        this.showSuccess('Geofence created successfully!');
+                    }
+
+                    this.drawGeofences();
+                    this.calculateCoverage();
+                    this.saveToStorage(); // Persist to localStorage
+                    this.cancelEdit();
+
+                    // Example: Uncomment when backend ready
+                    // const response = await fetch('/api/geofences', {
+                    //     method: 'POST',
+                    //     headers: { 'Content-Type': 'application/json' },
+                    //     body: JSON.stringify(this.formData)
+                    // });
+                    // const data = await response.json();
+                } catch (error) {
+                    this.showError('Error saving geofence: ' + error.message);
+                }
+            },
+
+            editFence(fence) {
+                this.editingFence = fence;
+                this.formData = { ...fence };
+                this.updateMapPreview();
+            },
+
+            async deleteFence(id) {
+                if (!confirm('Are you sure you want to delete this geofence?')) return;
+
+                try {
+                    this.geofences = this.geofences.filter(f => f.id !== id);
+                    this.drawGeofences();
+                    this.calculateCoverage();
+                    this.saveToStorage(); // Persist to localStorage
+                    this.showSuccess('Geofence deleted successfully!');
+
+                    // Example: Uncomment when backend ready
+                    // await fetch(`/api/geofences/${id}`, { method: 'DELETE' });
+                } catch (error) {
+                    this.showError('Error deleting geofence: ' + error.message);
+                }
+            },
+
+            cancelEdit() {
+                this.editingFence = null;
+                this.isDrawing = false; // Reset drawing state
+                this.formData = {
+                    name: '',
+                    center_lat: '',
+                    center_lng: '',
+                    radius_meters: 500,
+                    enabled: true,
+                    notification_enabled: true
+                };
+                if (this.previewCircle) {
+                    this.map.removeLayer(this.previewCircle);
+                    this.previewCircle = null;
+                }
+                // Clear any drawn shapes
+                if (this.drawnItems) {
+                    this.drawnItems.clearLayers();
+                }
+            },
+
+            showSuccess(msg) {
+                this.successMessage = msg;
+                this.errorMessage = '';
+                setTimeout(() => this.successMessage = '', 5000);
+            },
+
+            showError(msg) {
+                this.errorMessage = msg;
+                this.successMessage = '';
+                setTimeout(() => this.errorMessage = '', 5000);
+            }
+        };
+    }
+</script>
+{% endblock %}

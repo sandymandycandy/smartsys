@@ -1,0 +1,15 @@
+[Unit]
+Description=Smart Pastoralism LoRa Receiver
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/smart_pastoralism
+Environment="PATH=/home/admin/smart_pastoralism/venv/bin"
+ExecStart=/home/admin/smart_pastoralism/venv/bin/python reciver_rpi5.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

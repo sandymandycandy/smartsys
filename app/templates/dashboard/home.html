@@ -1,0 +1,250 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}Dashboard - Smart Pastoralism{% endblock %}
+
+{% block page_content %}
+<div x-data="dashboard()" x-init="init()">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">🐄 Dashboard</h1>
+        <p class="mt-2 text-sm text-gray-600">Real-time livestock monitoring overview</p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Animals -->
+        <div class="bg-white rounded-lg shadow-lg p-6 transform hover:scale-105 transition">
+            <div class="flex items-center">
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-600">Total Animals</p>
+                    <p class="mt-2 text-3xl font-semibold text-gray-900">{{ stats.total }}</p>
+                </div>
+                <div class="ml-4 flex-shrink-0">
+                    <span class="text-4xl">🐮</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Healthy -->
+        <div class="bg-white rounded-lg shadow-lg p-6 transform hover:scale-105 transition">
+            <div class="flex items-center">
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-600">Healthy</p>
+                    <p class="mt-2 text-3xl font-semibold text-green-600">{{ stats.healthy }}</p>
+                </div>
+                <div class="ml-4 flex-shrink-0">
+                    <span class="text-4xl">✅</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warnings -->
+        <div class="bg-white rounded-lg shadow-lg p-6 transform hover:scale-105 transition">
+            <div class="flex items-center">
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-600">Warnings</p>
+                    <p class="mt-2 text-3xl font-semibold text-yellow-600">{{ stats.warnings }}</p>
+                </div>
+                <div class="ml-4 flex-shrink-0">
+                    <span class="text-4xl">⚠️</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Critical Alerts -->
+        <div class="bg-white rounded-lg shadow-lg p-6 transform hover:scale-105 transition">
+            <div class="flex items-center">
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-600">Critical</p>
+                    <p class="mt-2 text-3xl font-semibold text-red-600">{{ stats.critical }}</p>
+                </div>
+                <div class="ml-4 flex-shrink-0">
+                    <span class="text-4xl">🚨</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Live Alerts Feed -->
+        <div class="lg:col-span-2 bg-white rounded-lg shadow-lg">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">🔔 Recent Alerts</h2>
+            </div>
+            <div class="p-6 max-h-96 overflow-y-auto">
+                {% if alerts %}
+                {% for alert in alerts %}
+                <div
+                    class="mb-4 p-4 border rounded-lg {% if 'CRITICAL' in alert.alert_type %}border-red-200 bg-red-50{% elif 'WARNING' in alert.alert_type %}border-yellow-200 bg-yellow-50{% else %}border-blue-200 bg-blue-50{% endif %}">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center">
+                                <span class="font-semibold text-sm">{{ alert.alert_type }}</span>
+                                <span class="mx-2 text-gray-400">•</span>
+                                <span class="text-sm text-gray-600">{{ alert.device_id }}</span>
+                            </div>
+                            <p class="mt-1 text-sm text-gray-700">{{ alert.alert_message }}</p>
+                            <p class="mt-1 text-xs text-gray-500">{{ alert.alert_time }}</p>
+                        </div>
+                        <button data-alert-id="{{ alert.id }}"
+                            onclick="resolveAlert(this.getAttribute('data-alert-id'))"
+                            class="ml-4 text-sm text-blue-600 hover:text-blue-800">
+                            Resolve
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-gray-500 text-center py-8">No active alerts ✅</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="space-y-6">
+            <!-- Average Temperature -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">🌡️ Avg Temperature</h3>
+                <div class="text-center">
+                    <p class="text-4xl font-bold text-gray-900">{{ "%.1f"|format(stats.avg_temp) }}</p>
+                    <p class="text-sm text-gray-600">°C</p>
+                </div>
+            </div>
+
+            <!-- Average Heart Rate -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">❤️ Avg Heart Rate</h3>
+                <div class="text-center">
+                    <p class="text-4xl font-bold text-gray-900">{{ stats.avg_hr|round|int }}</p>
+                    <p class="text-sm text-gray-600">BPM</p>
+                </div>
+            </div>
+
+            <!-- Battery Status -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">🔋 Battery Status</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-600">Good (&gt;50%)</span>
+                        <span class="font-semibold">{{ stats.battery_good }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-600">Low (20-50%)</span>
+                        <span class="font-semibold text-yellow-600">{{ stats.battery_low }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-600">Critical (&lt;20%)</span>
+                        <span class="font-semibold text-red-600">{{ stats.battery_critical }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mini Map -->
+    {% if locations %}
+    <div class="mt-6 bg-white rounded-lg shadow-lg">
+        <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+            <h2 class="text-xl font-semibold text-gray-900">📍 Animal Locations</h2>
+            <a href="/dashboard/map" class="text-sm text-blue-600 hover:text-blue-800">View Full Map →</a>
+        </div>
+        <div class="p-6">
+            <div id="miniMap" style="height: 400px; border-radius: 8px;"></div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Store locations data from Jinja2 template
+    var dashboardLocations = {{ locations | tojson | safe }};
+
+    function dashboard() {
+        return {
+            map: null,
+
+            init() {
+                this.initMap();
+                this.listenWebSocket();
+            },
+
+            initMap() {
+                var locations = dashboardLocations;
+
+                if (!locations || locations.length === 0) return;
+
+                // Check if map is already initialized to prevent errors
+                var container = document.getElementById('miniMap');
+                if (container && container._leaflet_id) {
+                    return; // Map already exists
+                }
+
+                var firstLoc = locations[0];
+                this.map = L.map('miniMap').setView([firstLoc.latitude, firstLoc.longitude], 13);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(this.map);
+
+                var self = this;
+                // Add markers
+                locations.forEach(function (loc) {
+                    if (loc.latitude && loc.longitude) {
+                        var color = self.getMarkerColor(loc);
+                        var marker = L.circleMarker([loc.latitude, loc.longitude], {
+                            color: color,
+                            fillColor: color,
+                            fillOpacity: 0.7,
+                            radius: 10
+                        }).addTo(self.map);
+
+                        marker.bindPopup(
+                            '<b>' + loc.device_id + '</b><br>' +
+                            'Temp: ' + loc.temperature + '°C<br>' +
+                            'HR: ' + loc.heart_rate + ' BPM<br>' +
+                            'Battery: ' + loc.battery + '%'
+                        );
+                    }
+                });
+
+                // Fit bounds
+                var bounds = locations
+                    .filter(function (l) { return l.latitude && l.longitude; })
+                    .map(function (l) { return [l.latitude, l.longitude]; });
+                if (bounds.length > 0) {
+                    this.map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            },
+
+            getMarkerColor: function (loc) {
+                if (loc.temperature > 39.5 || loc.heart_rate > 80) return '#EF4444';
+                if (loc.temperature > 39.0 || loc.heart_rate > 75) return '#F59E0B';
+                return '#10B981';
+            },
+
+            listenWebSocket: function () {
+                window.addEventListener('ws-message', function (event) {
+                    var data = event.detail;
+                    if (data.type === 'new_alert') {
+                        setTimeout(function () { location.reload(); }, 2000);
+                    }
+                });
+            }
+        };
+    }
+
+    async function resolveAlert(alertId) {
+        try {
+            var response = await fetch('/api/alerts/' + alertId + '/resolve', {
+                method: 'POST'
+            });
+            if (response.ok) {
+                location.reload();
+            }
+        } catch (error) {
+            console.error('Error resolving alert:', error);
+        }
+    }
+</script>
+{% endblock %}

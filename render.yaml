@@ -1,0 +1,47 @@
+# Render Blueprint for Smart Pastoralism (FastAPI)
+# Docs: https://render.com/docs/blueprint-spec
+#
+# One long-lived process (NOT serverless) so WebSockets + the background
+# LoRa monitor thread work. Single uvicorn worker on purpose: the LoRa
+# monitor and WebSocket broadcasting keep state in memory, so running
+# multiple workers would duplicate the monitor and break broadcasts.
+
+services:
+  - type: web
+    name: smart-pastoralism
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn run:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DEBUG
+        value: "False"
+      # Auto-generated strong secret for sessions; managed by Render.
+      - key: SECRET_KEY
+        generateValue: true
+      # SQLite files are bundled in the repo and live in the app root.
+      - key: LORA_DB_PATH
+        value: livestock_data.db
+      - key: LORA_CHECK_INTERVAL
+        value: "2"
+      # --- Optional email alerts (SMTP). Left disabled by default. ---
+      # To enable, set SMTP_ENABLED=True here and add the secrets below
+      # in the Render dashboard (Environment tab) — do NOT commit them.
+      - key: SMTP_ENABLED
+        value: "False"
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: NOTIFICATION_EMAILS
+        sync: false

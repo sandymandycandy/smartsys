@@ -1,0 +1,464 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}Analytics - Smart Pastoralism{% endblock %}
+
+{% block page_content %}
+<div x-data="analytics" x-init="init()">
+    <div class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">📈 Analytics</h1>
+            <p class="mt-2 text-sm text-gray-600">Health trends, insights, and alert analytics</p>
+        </div>
+        <div x-data="{ open: false }" class="relative">
+            <button @click="open = !open"
+                class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export Data
+                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div x-show="open" @click.away="open = false" x-cloak
+                class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-10 border border-gray-200"
+                style="display: none;">
+                <a href="/api/export/readings/csv"
+                    class="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">
+                    📊 All Readings (CSV)
+                </a>
+                <a href="/api/export/alerts/csv" class="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100">
+                    🔔 All Alerts (CSV)
+                </a>
+                <a href="/api/export/analytics/summary"
+                    class="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg">
+                    📈 Analytics Summary (CSV)
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-blue-100 text-sm font-medium">Total Alerts (30d)</p>
+                    <p class="text-3xl font-bold mt-1" x-text="alertSummary.total || 0"></p>
+                </div>
+                <span class="text-4xl opacity-80">🔔</span>
+            </div>
+        </div>
+        <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-red-100 text-sm font-medium">Active Alerts</p>
+                    <p class="text-3xl font-bold mt-1" x-text="alertSummary.active || 0"></p>
+                </div>
+                <span class="text-4xl opacity-80">🚨</span>
+            </div>
+        </div>
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-green-100 text-sm font-medium">Resolved</p>
+                    <p class="text-3xl font-bold mt-1" x-text="alertSummary.resolved || 0"></p>
+                </div>
+                <span class="text-4xl opacity-80">✅</span>
+            </div>
+        </div>
+        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-purple-100 text-sm font-medium">Resolution Rate</p>
+                    <p class="text-3xl font-bold mt-1" x-text="resolutionRate + '%'"></p>
+                </div>
+                <span class="text-4xl opacity-80">📊</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Temperature Analytics -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold">🌡️ Temperature Trends</h2>
+            <select x-model="tempDays" @change="loadTemperatureTrends()"
+                class="border rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="1">Last 24 Hours</option>
+                <option value="7" selected>Last 7 Days</option>
+                <option value="30">Last 30 Days</option>
+            </select>
+        </div>
+        <div style="position: relative; height: 300px;">
+            <canvas id="tempTrendChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Heart Rate & Alerts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Heart Rate Distribution -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">❤️ Heart Rate Distribution</h3>
+                <select x-model="hrDays" @change="loadHeartRateAnalytics()"
+                    class="border rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="1">Last 24 Hours</option>
+                    <option value="7" selected>Last 7 Days</option>
+                    <option value="30">Last 30 Days</option>
+                </select>
+            </div>
+            <div style="position: relative; height: 300px;">
+                <canvas id="hrDistChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Alert Frequency by Type -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">🚨 Alerts by Type</h3>
+            </div>
+            <div style="position: relative; height: 300px;">
+                <canvas id="alertTypeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Trend Over Time -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold">📅 Alert Trend (Last 30 Days)</h2>
+        </div>
+        <div style="position: relative; height: 300px;">
+            <canvas id="alertTrendChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Top Alerting Devices -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <h3 class="text-lg font-semibold mb-4">🐄 Top Alerting Animals</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Alerts</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Critical</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="device in topDevices" :key="device.device_id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <span class="text-2xl mr-2"
+                                        x-text="device.device_id.startsWith('SHEEP') ? '🐑' : '🐄'"></span>
+                                    <span class="font-medium text-gray-900" x-text="device.device_id"></span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800"
+                                    x-text="device.alert_count"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800"
+                                    x-text="device.critical_count"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <a :href="'/dashboard/animals/' + device.device_id"
+                                    class="text-blue-600 hover:text-blue-800 font-medium">
+                                    View Details →
+                                </a>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="topDevices.length === 0">
+                        <tr>
+                            <td colspan="4" class="px-6 py-8 text-center text-gray-500">
+                                No alert data available
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('analytics', () => {
+            // Define chart instances in the factory scope, NOT in the returned data object.
+            // This prevents Alpine from proxying the chart instances, which breaks Chart.js.
+            let tempChart = null;
+            let hrDistChart = null;
+            let alertTypeChart = null;
+            let alertTrendChart = null;
+
+            return {
+                tempDays: 7,
+                hrDays: 7,
+                alertSummary: {},
+                topDevices: [],
+                resolutionRate: 0,
+
+                async init() {
+                    // Initialize charts immediately as library is loaded locally
+                    this.loadTemperatureTrends();
+                    this.loadHeartRateAnalytics();
+                    this.loadAlertAnalytics();
+                },
+
+                async loadTemperatureTrends() {
+                    try {
+                        const response = await fetch('/api/analytics/temperature?days=' + this.tempDays);
+                        const result = await response.json();
+
+                        var data = result.data;
+                        // Strict validation: must have data AND properly formatted entries
+                        if (!data || data.length === 0 || !data[0].avg_temp) {
+                            console.warn('API data invalid or empty, using demo data');
+                            data = this.generateDemoTempData();
+                        } else {
+                            console.log('Using API data:', data);
+                        }
+
+                        this.renderTempChart(data);
+                    } catch (error) {
+                        console.error('Error loading temperature trends:', error);
+                        const data = this.generateDemoTempData();
+                        this.renderTempChart(data);
+                    }
+                },
+
+                renderTempChart(data) {
+                    const ctxElement = document.getElementById('tempTrendChart');
+                    if (!ctxElement) return;
+
+                    if (tempChart) {
+                        tempChart.destroy();
+                    }
+
+                    tempChart = new Chart(ctxElement.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: data.map(function (d) { return d.label || (d.hour ? d.hour.split(' ')[1] : ''); }),
+                            datasets: [{
+                                label: 'Average Temperature',
+                                data: data.map(function (d) { return d.avg_temp; }),
+                                borderColor: '#EF4444',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    suggestedMin: 36,
+                                    suggestedMax: 42
+                                }
+                            }
+                        }
+                    });
+                },
+
+                generateDemoTempData() {
+                    var data = [];
+                    for (var i = 0; i < 12; i++) {
+                        data.push({
+                            label: (8 + i * 2) + ':00',
+                            avg_temp: 38.2 + Math.random() * 0.8,
+                            max_temp: 38.8 + Math.random() * 0.6,
+                            min_temp: 37.8 + Math.random() * 0.4
+                        });
+                    }
+                    return data;
+                },
+
+                async loadHeartRateAnalytics() {
+                    try {
+                        const response = await fetch('/api/analytics/heartrate?days=' + this.hrDays);
+                        const result = await response.json();
+
+                        var distribution = result.distribution;
+                        if (!distribution || distribution.length === 0 || distribution.every(d => d.count === 0)) {
+                            distribution = this.getDemoHeartRateData();
+                        }
+
+                        this.renderHeartRateChart(distribution);
+                    } catch (error) {
+                        console.error('Error loading heart rate analytics:', error);
+                        const distribution = this.getDemoHeartRateData();
+                        this.renderHeartRateChart(distribution);
+                    }
+                },
+
+                getDemoHeartRateData() {
+                    return [
+                        { range: 'Low (<50)', count: 5 },
+                        { range: 'Normal (50-65)', count: 45 },
+                        { range: 'Elevated (66-75)', count: 25 },
+                        { range: 'High (76-85)', count: 15 },
+                        { range: 'Critical (>85)', count: 10 }
+                    ];
+                },
+
+                renderHeartRateChart(distribution) {
+                    const ctxElement = document.getElementById('hrDistChart');
+                    if (!ctxElement) return;
+
+                    if (hrDistChart) {
+                        hrDistChart.destroy();
+                    }
+
+                    const hrCtx = ctxElement.getContext('2d');
+                    const colors = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#7C3AED'];
+
+                    hrDistChart = new Chart(hrCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: distribution.map(d => d.range),
+                            datasets: [{
+                                data: distribution.map(d => d.count),
+                                backgroundColor: colors,
+                                borderWidth: 2,
+                                borderColor: '#ffffff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: true, position: 'right' }
+                            }
+                        }
+                    });
+                },
+
+                async loadAlertAnalytics() {
+                    try {
+                        const response = await fetch('/api/analytics/alerts?days=30');
+                        const data = await response.json();
+                        this.processAlertData(data);
+                    } catch (error) {
+                        console.error('Error loading alert analytics:', error);
+                        this.processAlertData({}); // Trigger demo data
+                    }
+                },
+
+                processAlertData(data) {
+                    var summary = data.summary || {};
+                    var byType = data.by_type || [];
+                    var byDay = data.by_day || [];
+                    var byDevice = data.by_device || [];
+
+                    // Demo data check
+                    if (!summary.total) {
+                        summary = { total: 45, active: 8, resolved: 37 };
+                        this.resolutionRate = 82;
+
+                        byType = [
+                            { alert_type: 'TEMP_WARNING', count: 18 },
+                            { alert_type: 'TEMP_CRITICAL', count: 8 },
+                            { alert_type: 'HR_WARNING', count: 12 },
+                            { alert_type: 'HR_CRITICAL', count: 4 },
+                            { alert_type: 'BATTERY_LOW', count: 3 }
+                        ];
+
+                        byDevice = [
+                            { device_id: 'COW-001', alert_count: 12, critical_count: 3 },
+                            { device_id: 'COW-002', alert_count: 8, critical_count: 2 },
+                            { device_id: 'COW-003', alert_count: 6, critical_count: 1 }
+                        ];
+
+                        byDay = [];
+                        for (let i = 14; i >= 0; i--) {
+                            let d = new Date();
+                            d.setDate(d.getDate() - i);
+                            byDay.push({
+                                date: d.toISOString().split('T')[0],
+                                count: Math.floor(Math.random() * 8)
+                            });
+                        }
+                    }
+
+                    this.alertSummary = summary;
+                    this.topDevices = byDevice;
+                    if (summary.total > 0 && !this.resolutionRate) {
+                        this.resolutionRate = Math.round((summary.resolved / summary.total) * 100);
+                    }
+
+                    this.renderAlertCharts(byType, byDay);
+                },
+
+                renderAlertCharts(byType, byDay) {
+                    // Alert Type Chart
+                    const typeCtxElement = document.getElementById('alertTypeChart');
+                    if (typeCtxElement) {
+                        if (alertTypeChart) alertTypeChart.destroy();
+
+                        const typeColors = {
+                            'TEMP_CRITICAL': '#EF4444',
+                            'TEMP_WARNING': '#F59E0B',
+                            'HR_CRITICAL': '#DC2626',
+                            'HR_WARNING': '#FBBF24',
+                            'BATTERY_LOW': '#6B7280'
+                        };
+
+                        alertTypeChart = new Chart(typeCtxElement.getContext('2d'), {
+                            type: 'bar',
+                            data: {
+                                labels: byType.map(d => d.alert_type),
+                                datasets: [{
+                                    label: 'Count',
+                                    data: byType.map(d => d.count),
+                                    backgroundColor: byType.map(d => typeColors[d.alert_type] || '#3B82F6'),
+                                    borderRadius: 8
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: { y: { beginAtZero: true } }
+                            }
+                        });
+                    }
+
+                    // Alert Trend
+                    const trendCtxElement = document.getElementById('alertTrendChart');
+                    if (trendCtxElement) {
+                        if (alertTrendChart) alertTrendChart.destroy();
+
+                        alertTrendChart = new Chart(trendCtxElement.getContext('2d'), {
+                            type: 'line',
+                            data: {
+                                labels: byDay.map(d => d.date),
+                                datasets: [{
+                                    label: 'Alerts',
+                                    data: byDay.map(d => d.count),
+                                    borderColor: '#EF4444',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                    tension: 0.4,
+                                    fill: true
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: { y: { beginAtZero: true } }
+                            }
+                        });
+                    }
+                }
+            };
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,252 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}{{ animal.device_id }} - Smart Pastoralism{% endblock %}
+
+{% block page_content %}
+<div>
+    <!-- Back Button -->
+    <a href="/dashboard/animals" class="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">
+        ← Back to Animals
+    </a>
+
+    <!-- Animal Header -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                {% if animal.device_id.startswith('SHEEP') %}<span class="text-6xl mr-4">🐑</span>{% else %}<span class="text-6xl mr-4">🐄</span>{% endif %}
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{{ animal.device_id }}</h1>
+                    <p class="text-sm text-gray-600">Last update: {{ animal.received_time }}</p>
+                </div>
+            </div>
+            <div class="text-right">
+                {% if animal.temperature > 39.5 or animal.heart_rate > 80 %}
+                <span class="px-4 py-2 text-lg font-semibold rounded-full bg-red-100 text-red-800">
+                    🚨 Critical
+                </span>
+                {% elif animal.temperature > 39.0 or animal.heart_rate > 75 %}
+                <span class="px-4 py-2 text-lg font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                    ⚠️ Warning
+                </span>
+                {% else %}
+                <span class="px-4 py-2 text-lg font-semibold rounded-full bg-green-100 text-green-800">
+                    ✅ Healthy
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <!-- Body Temperature -->
+        <div
+            class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-10">
+                <span class="text-6xl">🌡️</span>
+            </div>
+            <div class="text-sm font-medium text-gray-600 mb-2 uppercase tracking-wide">Body Temperature</div>
+            <div
+                class="text-3xl font-bold flex items-end
+                {% set temp = animal.body_temperature if animal.body_temperature else animal.temperature %}
+                {% if temp > 39.5 %}text-red-600{% elif temp > 39.0 %}text-yellow-600{% else %}text-emerald-600{% endif %}">
+                {{ "%.1f"|format(temp) }}
+                <span class="text-xl ml-1 text-gray-500 font-normal">°C</span>
+            </div>
+            <p class="text-xs text-gray-400 mt-2">Target: 38.0 - 39.3°C</p>
+        </div>
+
+        <!-- Ambient Conditions -->
+        <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
+            <div class="text-sm font-medium text-gray-600 mb-2 uppercase tracking-wide">Environment</div>
+            <div class="flex justify-between items-end">
+                <div>
+                    <span class="text-xs text-gray-400">Ambient</span>
+                    <div class="text-2xl font-bold text-blue-600">
+                        {{ "%.1f"|format(animal.ambient_temperature or 0) }}°C
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs text-gray-400">Humidity</span>
+                    <div class="text-2xl font-bold text-cyan-600">
+                        {{ "%.1f"|format(animal.humidity or 0) }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
+            <div class="text-sm font-medium text-gray-600 mb-2 uppercase tracking-wide">Heart Rate</div>
+            <div
+                class="text-3xl font-bold {% if animal.heart_rate > 80 %}text-red-600{% elif animal.heart_rate > 75 %}text-yellow-600{% else %}text-rose-600{% endif %}">
+                {{ animal.heart_rate }} <span class="text-base text-gray-500 font-normal">BPM</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
+            <div class="text-sm font-medium text-gray-600 mb-2 uppercase tracking-wide">Battery & Motion</div>
+            <div class="flex justify-between items-end">
+                <div>
+                    <span class="text-xs text-gray-400">Battery</span>
+                    <div
+                        class="text-2xl font-bold {% if animal.battery < 20 %}text-red-600{% else %}text-green-600{% endif %}">
+                        {{ animal.battery }}%
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs text-gray-400">Activity</span>
+                    <div class="text-2xl font-bold text-purple-600">
+                        {{ "%.2f"|format(animal.motion_magnitude or 0) }}g
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">Temperature Trend (24h)</h3>
+            <div style="position: relative; height: 300px;">
+                <canvas id="tempChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">Heart Rate Trend (24h)</h3>
+            <div style="position: relative; height: 300px;">
+                <canvas id="hrChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Map -->
+    {% if animal.latitude and animal.longitude %}
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4">📍 Current Location</h3>
+        <div id="animalMap" style="height: 300px; border-radius: 8px;"></div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Alerts -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <h3 class="text-lg font-semibold mb-4">🔔 Recent Alerts</h3>
+        {% if alerts %}
+        <div class="space-y-3">
+            {% for alert in alerts %}
+            <div
+                class="p-4 border rounded-lg {% if 'CRITICAL' in alert.alert_type %}border-red-200 bg-red-50{% elif 'WARNING' in alert.alert_type %}border-yellow-200 bg-yellow-50{% else %}border-blue-200 bg-blue-50{% endif %}">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="font-semibold text-sm">{{ alert.alert_type }}</span>
+                        <p class="text-sm text-gray-700 mt-1">{{ alert.alert_message }}</p>
+                        <p class="text-xs text-gray-500 mt-1">{{ alert.alert_time }}</p>
+                    </div>
+                    {% if not alert.resolved %}
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Active</span>
+                    {% else %}
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Resolved</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-center py-4">No alerts for this animal ✅</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    // Historical data
+    const history = {{ history | tojson }};
+
+    // Temperature Chart
+    const tempCtx = document.getElementById('tempChart').getContext('2d');
+    const tempChart = new Chart(tempCtx, {
+        type: 'line',
+        data: {
+            labels: history.map(h => new Date(h.timestamp * 1000).toLocaleTimeString()),
+            datasets: [{
+                label: 'Temperature (°C)',
+                data: history.map(h => h.temperature),
+                borderColor: '#EF4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    suggestedMin: 36,
+                    suggestedMax: 41
+                },
+                x: {
+                    ticks: {
+                        maxTicksLimit: 12
+                    }
+                }
+            }
+        }
+    });
+
+    // Heart Rate Chart
+    const hrCtx = document.getElementById('hrChart').getContext('2d');
+    const hrChart = new Chart(hrCtx, {
+        type: 'line',
+        data: {
+            labels: history.map(h => new Date(h.timestamp * 1000).toLocaleTimeString()),
+            datasets: [{
+                label: 'Heart Rate (BPM)',
+                data: history.map(h => h.heart_rate),
+                borderColor: '#EF4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    suggestedMin: 40,
+                    suggestedMax: 100
+                },
+                x: {
+                    ticks: {
+                        maxTicksLimit: 12
+                    }
+                }
+            }
+        }
+    });
+
+    // Location Map
+    {% if animal.latitude and animal.longitude %}
+    (function () {
+        var container = document.getElementById('animalMap');
+        if (!container || container._leaflet_id) return;
+
+        var map = L.map('animalMap').setView([{{ animal.latitude }}, {{ animal.longitude }}], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    L.marker([{{ animal.latitude }}, {{ animal.longitude }}]).addTo(map)
+        .bindPopup('<b>{{ animal.device_id }}</b><br>Current Location').openPopup();
+    }) ();
+    {% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Navigation -->
+{% include 'components/navbar.html' %}
+
+<!-- Sidebar Layout -->
+<div class="flex h-screen pt-16" x-data="{ sidebarOpen: false }">
+    {% include 'components/sidebar.html' %}
+
+    <!-- Main content with sidebar - responsive padding for mobile -->
+    <main class="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6 lg:ml-0">
+        {% block page_content %}{% endblock %}
+    </main>
+</div>
+
+<!-- Mobile-friendly bottom navigation (alternative navigation) -->
+<nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
+    <div class="flex justify-around items-center h-16">
+        <a href="/dashboard" class="flex flex-col items-center text-gray-600 hover:text-blue-600">
+            <span class="text-xl">📊</span>
+            <span class="text-xs">Home</span>
+        </a>
+        <a href="/dashboard/map" class="flex flex-col items-center text-gray-600 hover:text-blue-600">
+            <span class="text-xl">📍</span>
+            <span class="text-xs">Map</span>
+        </a>
+        <a href="/dashboard/animals" class="flex flex-col items-center text-gray-600 hover:text-blue-600">
+            <span class="text-xl">🐮</span>
+            <span class="text-xs">Animals</span>
+        </a>
+        <a href="/dashboard/alerts" class="flex flex-col items-center text-gray-600 hover:text-blue-600">
+            <span class="text-xl">🔔</span>
+            <span class="text-xs">Alerts</span>
+        </a>
+        <a href="/settings/heatmap" class="flex flex-col items-center text-gray-600 hover:text-orange-600">
+            <span class="text-xl">🔥</span>
+            <span class="text-xs">Heatmap</span>
+        </a>
+    </div>
+</nav>
+
+<!-- Add bottom padding on mobile for the bottom nav -->
+<style>
+    @media (max-width: 1023px) {
+        main {
+            padding-bottom: 80px !important;
+        }
+    }
+</style>
+{% endblock %}

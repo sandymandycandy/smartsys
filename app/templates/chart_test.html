@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chart Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body class="bg-gray-50 p-8">
+    <h1 class="text-2xl font-bold mb-6">Chart.js Test</h1>
+
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Temperature Test Chart</h2>
+        <div style="position: relative; height: 300px">
+            <canvas id="testChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Wait for page to fully load
+        window.addEventListener('load', function () {
+            console.log('Page loaded');
+            console.log('Chart.js available:', typeof Chart !== 'undefined');
+
+            setTimeout(function () {
+                try {
+                    var ctx = document.getElementById('testChart').getContext('2d');
+                    var chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: ['8:00', '10:00', '12:00', '14:00', '16:00', '18:00'],
+                            datasets: [{
+                                label: 'Temperature',
+                                data: [38.2, 38.5, 38.8, 38.6, 38.4, 38.3],
+                                borderColor: '#EF4444',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    suggestedMin: 36,
+                                    suggestedMax: 42
+                                }
+                            }
+                        }
+                    });
+                    console.log('Chart created successfully!', chart);
+                } catch (e) {
+                    console.error('Error creating chart:', e);
+                    document.body.innerHTML += '<div class="bg-red-100 p-4 rounded-lg mt-4"><strong>Error:</strong> ' + e.message + '</div>';
+                }
+            }, 500);
+        });
+    </script>
+</body>
+
+</html>

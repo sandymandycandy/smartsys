@@ -1,0 +1,145 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}Live Map - Smart Pastoralism{% endblock %}
+
+{% block page_content %}
+<div x-data="liveMap()" x-init="init()">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">📍 Live Animal Tracking</h1>
+        <p class="mt-2 text-sm text-gray-600">Real-time GPS location monitoring</p>
+    </div>
+
+    <!-- Map Container -->
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden" style="height: calc(100vh - 200px);">
+        <div id="map" style="height: 100%; width: 100%;"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('liveMap', () => {
+            // Leaflet map instance stored in closure, NOT in Alpine data
+            let mapInstance = null;
+            let markerObjects = {};
+
+            return {
+                async init() {
+                    await this.loadMap();
+                    this.listenWebSocket();
+                    setInterval(() => this.updateLocations(), 10000);
+                },
+
+                async loadMap() {
+                    try {
+                        const response = await fetch('/api/map/locations');
+                        const data = await response.json();
+                        const locations = data.locations;
+
+                        if (mapInstance) return; // Prevent double initialization
+
+                        if (locations.length === 0) {
+                            // Default to a central location if no data (e.g., farm center or user location)
+                            // For demo, we'll use a generic lat/lng
+                            mapInstance = L.map('map').setView([17.3850, 78.4867], 13); // Hyderabad example
+                        } else {
+                            mapInstance = L.map('map').setView([locations[0].latitude, locations[0].longitude], 13);
+                        }
+
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '© OpenStreetMap'
+                        }).addTo(mapInstance);
+
+                        // Add markers
+                        locations.forEach(loc => this.addOrUpdateMarker(loc));
+
+                        // Fit bounds
+                        if (locations.length > 0) {
+                            const bounds = locations.map(l => [l.latitude, l.longitude]);
+                            mapInstance.fitBounds(bounds, { padding: [50, 50] });
+                        }
+                    } catch (error) {
+                        console.error("Error loading map:", error);
+                        // Fallback map init
+                        if (!mapInstance) {
+                            mapInstance = L.map('map').setView([0, 0], 2);
+                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                                attribution: '© OpenStreetMap'
+                            }).addTo(mapInstance);
+                        }
+                    }
+                },
+
+                addOrUpdateMarker(loc) {
+                    if (!mapInstance) return;
+
+                    const color = this.getMarkerColor(loc.status);
+
+                    if (markerObjects[loc.device_id]) {
+                        // Update existing marker
+                        markerObjects[loc.device_id].setLatLng([loc.latitude, loc.longitude]);
+                        // Update popup content? Usually better to rebind or update content dynamically
+                        // For simplicity, we keep existing popup or recreate
+                    } else {
+                        // Create new marker
+                        const marker = L.circleMarker([loc.latitude, loc.longitude], {
+                            color: color,
+                            fillColor: color,
+                            fillOpacity: 0.7,
+                            radius: 12
+                        }).addTo(mapInstance);
+
+                        marker.bindPopup(this.getPopupContent(loc));
+                        markerObjects[loc.device_id] = marker;
+                    }
+                },
+
+                getPopupContent(loc) {
+                    return `
+                    <div class="p-2">
+                        <h3 class="font-bold text-lg mb-2">${loc.device_id}</h3>
+                        <div class="space-y-1 text-sm">
+                            <p><strong>Temperature:</strong> ${loc.temperature}°C</p>
+                            <p><strong>Heart Rate:</strong> ${loc.heart_rate} BPM</p>
+                            <p><strong>Battery:</strong> ${loc.battery}%</p>
+                            <p><strong>Status:</strong> ${loc.status}</p>
+                        </div>
+                        <a href="/dashboard/animals/${loc.device_id}" 
+                           class="mt-3 block text-center bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                            View Details
+                        </a>
+                    </div>
+                `;
+                },
+
+                getMarkerColor(status) {
+                    const colors = {
+                        healthy: '#10B981',
+                        warning: '#F59E0B',
+                        critical: '#EF4444'
+                    };
+                    return colors[status] || colors.healthy;
+                },
+
+                async updateLocations() {
+                    try {
+                        const response = await fetch('/api/map/locations');
+                        const data = await response.json();
+                        data.locations.forEach(loc => this.addOrUpdateMarker(loc));
+                    } catch (error) {
+                        console.error('Error updating locations:', error);
+                    }
+                },
+
+                listenWebSocket() {
+                    window.addEventListener('ws-message', (event) => {
+                        const data = event.detail;
+                        if (data.type === 'new_reading' && data.data.latitude && data.data.longitude) {
+                            this.updateLocations();
+                        }
+                    });
+                }
+            };
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+[Unit]
+Description=Smart Pastoralism System
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/smart_pastoralism
+ExecStart=/home/admin/smart_pastoralism/start_system.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

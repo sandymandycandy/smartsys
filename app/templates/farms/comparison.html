@@ -1,0 +1,274 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}Farm Comparison - Smart Pastoralism{% endblock %}
+
+{% block page_content %}
+<div x-data="farmComparison" x-init="init()">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center gap-3 mb-4">
+            <a href="/farms" class="text-gray-600 hover:text-gray-900">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </a>
+            <h1 class="text-3xl font-bold text-gray-900">📊 Farm Performance Comparison</h1>
+        </div>
+        <p class="text-sm text-gray-600">Compare statistics and performance across all farms</p>
+    </div>
+
+    <!-- Comparison Table -->
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Farm</th>
+                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Location</th>
+                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Animals</th>
+                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Healthy</th>
+                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Alerts</th>
+                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Milk (30d)</th>
+                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Avg Yield</th>
+                        <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Health %</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for farm in farms %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">
+                            <div>
+                                <a href="/farms/{{ farm.farm_id }}"
+                                    class="font-semibold text-blue-600 hover:text-blue-800">
+                                    {{ farm.farm_name }}
+                                </a>
+                                <p class="text-xs text-gray-500">{{ farm.farm_code }}</p>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 text-center text-sm text-gray-600">
+                            {{ farm.location or 'Not set' }}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="text-lg font-bold text-blue-600">
+                                {{ farm.total_animals or 0 }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="text-lg font-bold text-green-600">
+                                {{ farm.healthy_animals or 0 }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            {% if farm.active_alerts > 0 %}
+                            <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full font-semibold">
+                                {{ farm.active_alerts }}
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">0</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="text-lg font-bold text-purple-600">
+                                {{ (farm.total_yield or 0)|round(1) }}L
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            {% if farm.avg_yield %}
+                            <span class="text-sm font-semibold text-gray-700">
+                                {{ farm.avg_yield|round(1) }}L
+                            </span>
+                            {% else %}
+                            <span class="text-gray-400">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            {% if farm.total_animals and farm.total_animals > 0 %}
+                            {% set health_pct = ((farm.healthy_animals or 0) / farm.total_animals * 100)|round(0) %}
+                            <div class="flex items-center justify-center">
+                                <span class="text-sm font-semibold 
+                                        {% if health_pct >= 90 %}text-green-600
+                                        {% elif health_pct >= 70 %}text-yellow-600
+                                        {% else %}text-red-600{% endif %}">
+                                    {{ health_pct }}%
+                                </span>
+                            </div>
+                            {% else %}
+                            <span class="text-gray-400">N/A</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-gray-100 font-bold">
+                    <tr>
+                        <td class="px-6 py-4">TOTAL / AVERAGE</td>
+                        <td class="px-6 py-4 text-center">{{ farms|length }} farms</td>
+                        <td class="px-6 py-4 text-center text-blue-600" x-text="totals.animals"></td>
+                        <td class="px-6 py-4 text-center text-green-600" x-text="totals.healthy"></td>
+                        <td class="px-6 py-4 text-center text-red-600" x-text="totals.alerts"></td>
+                        <td class="px-6 py-4 text-center text-purple-600" x-text="totals.milk + 'L'"></td>
+                        <td class="px-6 py-4 text-center text-gray-700" x-text="totals.avgYield + 'L'"></td>
+                        <td class="px-6 py-4 text-center"
+                            :class="totals.healthPct >= 90 ? 'text-green-600' : 'text-yellow-600'"
+                            x-text="totals.healthPct + '%'"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-sm font-semibold text-gray-600 mb-2">🏆 Best Health Rate</h3>
+            <p class="text-2xl font-bold text-green-600" x-text="bestFarm.health?.name || 'N/A'"></p>
+            <p class="text-sm text-gray-500" x-text="bestFarm.health?.value"></p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-sm font-semibold text-gray-600 mb-2">🥛 Top Milk Producer</h3>
+            <p class="text-2xl font-bold text-purple-600" x-text="bestFarm.milk?.name || 'N/A'"></p>
+            <p class="text-sm text-gray-500" x-text="bestFarm.milk?.value"></p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-sm font-semibold text-gray-600 mb-2">📈 Largest Herd</h3>
+            <p class="text-2xl font-bold text-blue-600" x-text="bestFarm.size?.name || 'N/A'"></p>
+            <p class="text-sm text-gray-500" x-text="bestFarm.size?.value"></p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-sm font-semibold text-gray-600 mb-2">⚠️ Most Alerts</h3>
+            <p class="text-2xl font-bold text-red-600" x-text="worstFarm.alerts?.name || 'N/A'"></p>
+            <p class="text-sm text-gray-500" x-text="worstFarm.alerts?.value"></p>
+        </div>
+    </div>
+
+    <!-- Insights -->
+    <div class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-lg">
+        <h3 class="text-lg font-semibold text-blue-900 mb-2">💡 Insights</h3>
+        <ul class="space-y-2 text-blue-800">
+            <li x-show="insights.length > 0" x-for="insight in insights" :key="insight" x-text="'• ' + insight"></li>
+            <li x-show="insights.length === 0">No significant insights at this time.</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('farmComparison', () => ({
+            farms: {{ farms| tojson }},
+        totals: {
+        animals: 0,
+        healthy: 0,
+        alerts: 0,
+        milk: 0,
+        avgYield: 0,
+        healthPct: 0
+    },
+        bestFarm: {
+        health: null,
+        milk: null,
+        size: null
+    },
+        worstFarm: {
+        alerts: null
+    },
+        insights: [],
+
+        init() {
+        this.calculateTotals();
+        this.findBestAndWorst();
+        this.generateInsights();
+    },
+
+        calculateTotals() {
+        this.totals.animals = this.farms.reduce((sum, f) => sum + (f.total_animals || 0), 0);
+        this.totals.healthy = this.farms.reduce((sum, f) => sum + (f.healthy_animals || 0), 0);
+        this.totals.alerts = this.farms.reduce((sum, f) => sum + (f.active_alerts || 0), 0);
+        this.totals.milk = this.farms.reduce((sum, f) => sum + (f.total_yield || 0), 0).toFixed(1);
+
+        const avgSum = this.farms.reduce((sum, f) => sum + (f.avg_yield || 0), 0);
+        this.totals.avgYield = (avgSum / this.farms.length).toFixed(1);
+
+        this.totals.healthPct = this.totals.animals > 0
+            ? ((this.totals.healthy / this.totals.animals) * 100).toFixed(0)
+            : 0;
+    },
+
+        findBestAndWorst() {
+        if(this.farms.length === 0) return;
+
+    // Best health rate
+    let bestHealth = this.farms[0];
+    this.farms.forEach(f => {
+        const currentPct = f.total_animals > 0 ? (f.healthy_animals / f.total_animals) : 0;
+        const bestPct = bestHealth.total_animals > 0 ? (bestHealth.healthy_animals / bestHealth.total_animals) : 0;
+        if (currentPct > bestPct) bestHealth = f;
+    });
+    const healthPct = bestHealth.total_animals > 0
+        ? ((bestHealth.healthy_animals / bestHealth.total_animals) * 100).toFixed(0)
+        : 0;
+    this.bestFarm.health = {
+        name: bestHealth.farm_name,
+        value: `${healthPct}% healthy`
+    };
+
+    // Top milk producer
+    const topMilk = this.farms.reduce((best, f) =>
+        (f.total_yield || 0) > (best.total_yield || 0) ? f : best
+    );
+    this.bestFarm.milk = {
+        name: topMilk.farm_name,
+        value: `${(topMilk.total_yield || 0).toFixed(1)}L total`
+    };
+
+    // Largest herd
+    const largest = this.farms.reduce((best, f) =>
+        (f.total_animals || 0) > (best.total_animals || 0) ? f : best
+    );
+    this.bestFarm.size = {
+        name: largest.farm_name,
+        value: `${largest.total_animals || 0} animals`
+    };
+
+    // Most alerts (worst)
+    const mostAlerts = this.farms.reduce((worst, f) =>
+        (f.active_alerts || 0) > (worst.active_alerts || 0) ? f : worst
+    );
+    this.worstFarm.alerts = {
+        name: mostAlerts.farm_name,
+        value: `${mostAlerts.active_alerts || 0} active alerts`
+    };
+            },
+
+    generateInsights() {
+        // Generate actionable insights
+        if (this.totals.healthPct < 70) {
+            this.insights.push('Overall herd health is below 70% - consider reviewing health protocols');
+        }
+        if (this.totals.alerts > 5) {
+            this.insights.push(`${this.totals.alerts} active alerts across all farms - prioritize resolution`);
+        }
+
+        const farmVariance = this.farms.map(f =>
+            f.total_animals > 0 ? (f.healthy_animals / f.total_animals) : 0
+        );
+        const minHealth = Math.min(...farmVariance) * 100;
+        const maxHealth = Math.max(...farmVariance) * 100;
+        if (maxHealth - minHealth > 20) {
+            this.insights.push('Large health variance between farms - share best practices from top performers');
+        }
+
+        if (this.totals.milk > 0 && this.totals.avgYield < 5) {
+            this.insights.push('Average yield is below optimal - consider nutrition and health interventions');
+        }
+
+        if (this.insights.length === 0) {
+            this.insights.push('All farms performing well - keep up the good work!');
+        }
+    }
+        }));
+    });
+</script>
+{% endblock %}

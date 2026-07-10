@@ -1,0 +1,15 @@
+[Unit]
+Description=Smart Pastoralism Web Application
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/smart_pastoralism
+Environment="PATH=/home/admin/smart_pastoralism/venv/bin"
+ExecStart=/home/admin/smart_pastoralism/venv/bin/gunicorn run:app -w 4 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

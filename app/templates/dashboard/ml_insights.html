@@ -1,0 +1,435 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}ML Insights - Smart Pastoralism{% endblock %}
+
+{% block page_content %}
+<div x-data="mlDashboard()" x-init="init()">
+    <div class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">🤖 AI Health Insights</h1>
+            <p class="mt-2 text-sm text-gray-600">Machine learning-powered disease detection and predictions</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button @click="refreshData()"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                🔄 Refresh
+            </button>
+            <a href="/api/ml/retrain" target="_blank"
+                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                🎯 Retrain Models
+            </a>
+        </div>
+    </div>
+
+    <!-- ML Status Banner -->
+    <div x-show="!mlAvailable" class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded-lg">
+        <div class="flex items-center">
+            <span class="text-2xl mr-3">⚠️</span>
+            <div>
+                <h3 class="text-yellow-800 font-semibold">ML Libraries Not Installed</h3>
+                <p class="text-yellow-700 text-sm mt-1">Run: <code
+                        class="bg-yellow-100 px-2 py-1 rounded">pip install numpy pandas scikit-learn</code></p>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="mlAvailable">
+        <!-- System Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-blue-100 text-sm font-medium">Model Status</p>
+                        <p class="text-2xl font-bold mt-1" x-text="modelStatus"></p>
+                    </div>
+                    <span class="text-4xl opacity-80">🧠</span>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-green-100 text-sm font-medium">Predictions Made</p>
+                        <p class="text-2xl font-bold mt-1" x-text="totalPredictions"></p>
+                    </div>
+                    <span class="text-4xl opacity-80">📊</span>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-red-100 text-sm font-medium">Anomalies Detected</p>
+                        <p class="text-2xl font-bold mt-1" x-text="anomaliesDetected"></p>
+                    </div>
+                    <span class="text-4xl opacity-80">🚨</span>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-purple-100 text-sm font-medium">At Risk Animals</p>
+                        <p class="text-2xl font-bold mt-1" x-text="atRiskCount"></p>
+                    </div>
+                    <span class="text-4xl opacity-80">⚕️</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Animal Selection & Analysis -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">Select Animal for Analysis</h3>
+                <select x-model="selectedDevice" @change="loadPredictions()"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">-- Select Animal --</option>
+                    <template x-for="device in devices" :key="device">
+                        <option :value="device" x-text="device"></option>
+                    </template>
+                </select>
+
+                <div x-show="selectedDevice" class="mt-4 space-y-2">
+                    <button @click="predictAnomaly()"
+                        class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        🔍 Detect Anomalies
+                    </button>
+                    <button @click="predictDisease()"
+                        class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                        🏥 Predict Disease
+                    </button>
+                    <button @click="forecastHealth()"
+                        class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        📈 Health Forecast
+                    </button>
+                </div>
+            </div>
+
+            <!-- Anomaly Detection Result -->
+            <div class="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="text-2xl mr-2">🔍</span>
+                    Anomaly Detection
+                </h3>
+
+                <div x-show="!anomalyResult" class="text-center py-8 text-gray-400">
+                    <span class="text-4xl">🤖</span>
+                    <p class="mt-2">Select an animal and click "Detect Anomalies"</p>
+                </div>
+
+                <div x-show="anomalyResult" class="space-y-4">
+                    <div class="flex items-center justify-between p-4 rounded-lg"
+                        :class="anomalyResult?.is_anomaly ? 'bg-red-50 border-2 border-red-300' : 'bg-green-50 border-2 border-green-300'">
+                        <div>
+                            <p class="font-semibold"
+                                :class="anomalyResult?.is_anomaly ? 'text-red-800' : 'text-green-800'">
+                                <span
+                                    x-text="anomalyResult?.is_anomaly ? '⚠️ ANOMALY DETECTED' : '✅ NORMAL BEHAVIOR'"></span>
+                            </p>
+                            <p class="text-sm mt-1"
+                                :class="anomalyResult?.is_anomaly ? 'text-red-600' : 'text-green-600'"
+                                x-text="anomalyResult?.explanation"></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-2xl font-bold"
+                                :class="anomalyResult?.is_anomaly ? 'text-red-600' : 'text-green-600'"
+                                x-text="Math.round(anomalyResult?.confidence || 0) + '%'"></p>
+                            <p class="text-xs text-gray-500">Confidence</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600"><strong>Model:</strong> <span
+                                x-text="anomalyResult?.model"></span></p>
+                        <p class="text-sm text-gray-600 mt-1"><strong>Score:</strong> <span
+                                x-text="anomalyResult?.anomaly_score?.toFixed(3)"></span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Disease Prediction & Forecast -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Disease Prediction -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="text-2xl mr-2">🏥</span>
+                    Disease Prediction
+                </h3>
+
+                <div x-show="!diseaseResult" class="text-center py-8 text-gray-400">
+                    <span class="text-4xl">💊</span>
+                    <p class="mt-2">Click "Predict Disease" to analyze</p>
+                </div>
+
+                <div x-show="diseaseResult" class="space-y-4">
+                    <div class="text-center p-6 rounded-lg" :class="{
+                            'bg-green-50 border-2 border-green-300': diseaseResult?.disease === 'healthy',
+                            'bg-yellow-50 border-2 border-yellow-300': diseaseResult?.disease === 'heat_stress' || diseaseResult?.disease === 'lameness',
+                            'bg-red-50 border-2 border-red-300': diseaseResult?.disease === 'fever' || diseaseResult?.disease === 'respiratory'
+                        }">
+                        <p class="text-3xl font-bold uppercase" :class="{
+                                'text-green-700': diseaseResult?.disease === 'healthy',
+                                'text-yellow-700': diseaseResult?.disease === 'heat_stress' || diseaseResult?.disease === 'lameness',
+                                'text-red-700': diseaseResult?.disease === 'fever' || diseaseResult?.disease === 'respiratory'
+                            }" x-text="diseaseResult?.disease?.replace('_', ' ')"></p>
+                        <p class="text-sm mt-2 text-gray-600">
+                            Probability: <strong
+                                x-text="Math.round((diseaseResult?.probability || 0) * 100) + '%'"></strong>
+                        </p>
+
+                        <!-- Confidence meter -->
+                        <div class="w-full bg-gray-200 rounded-full h-3 mt-4">
+                            <div class="h-3 rounded-full transition-all duration-500" :class="{
+                                    'bg-green-500': diseaseResult?.confidence < 70,
+                                    'bg-yellow-500': diseaseResult?.confidence >= 70 && diseaseResult?.confidence < 85,
+                                    'bg-red-500': diseaseResult?.confidence >= 85
+                                }" :style="'width: ' + (diseaseResult?.confidence || 0) + '%'"></div>
+                        </div>
+                    </div>
+
+                    <!-- Recommendations -->
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="font-semibold text-blue-900 mb-2">📋 Recommendations:</p>
+                        <ul class="space-y-1">
+                            <template x-for="rec in diseaseResult?.recommendations" :key="rec">
+                                <li class="text-sm text-blue-800 flex items-start">
+                                    <span class="mr-2">•</span>
+                                    <span x-text="rec"></span>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Health Forecast -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="text-2xl mr-2">📈</span>
+                    24-Hour Health Forecast
+                </h3>
+
+                <div x-show="!forecastResult || forecastResult.error" class="text-center py-8 text-gray-400">
+                    <span class="text-4xl">🔮</span>
+                    <p class="mt-2" x-text="forecastResult?.error || 'Click \" Health Forecast\" to predict'"></p>
+                </div>
+
+                <div x-show="forecastResult && !forecastResult.error" class="space-y-4">
+                    <!-- Risk Level Badge -->
+                    <div class="text-center p-4 rounded-lg" :class="{
+                            'bg-green-50': forecastResult?.risk_level === 'low',
+                            'bg-yellow-50': forecastResult?.risk_level === 'medium',
+                            'bg-red-50': forecastResult?.risk_level === 'high'
+                        }">
+                        <p class="text-sm text-gray-600">Risk Level</p>
+                        <p class="text-2xl font-bold uppercase" :class="{
+                                'text-green-700': forecastResult?.risk_level === 'low',
+                                'text-yellow-700': forecastResult?.risk_level === 'medium',
+                                'text-red-700': forecastResult?.risk_level === 'high'
+                            }" x-text="forecastResult?.risk_level"></p>
+                    </div>
+
+                    <!-- Predictions -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-xs text-gray-500">Current → Predicted</p>
+                            <p class="text-sm font-semibold text-gray-900 mt-1">
+                                <span x-text="forecastResult?.current_temperature?.toFixed(1)"></span>°C →
+                                <span class="text-blue-600"
+                                    x-text="forecastResult?.predicted_temperature?.toFixed(1)"></span>°C
+                            </p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <span x-text="forecastResult?.temperature_trend === 'increasing' ? '📈' : '📉'"></span>
+                                <span x-text="forecastResult?.temperature_trend"></span>
+                            </p>
+                        </div>
+
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-xs text-gray-500">Current → Predicted</p>
+                            <p class="text-sm font-semibold text-gray-900 mt-1">
+                                <span x-text="forecastResult?.current_heart_rate"></span> →
+                                <span class="text-purple-600" x-text="forecastResult?.predicted_heart_rate"></span> BPM
+                            </p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <span x-text="forecastResult?.heart_rate_trend === 'increasing' ? '📈' : '📉'"></span>
+                                <span x-text="forecastResult?.heart_rate_trend"></span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 p-3 rounded-lg text-center">
+                        <p class="text-xs text-gray-500">Forecast Confidence</p>
+                        <p class="text-lg font-bold text-gray-900" x-text="forecastResult?.confidence + '%'"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Predictions History -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">📜 Recent ML Predictions</h3>
+
+            <div x-show="recentPredictions.length === 0" class="text-center py-8 text-gray-400">
+                <span class="text-4xl">📊</span>
+                <p class="mt-2">No predictions yet. Analyze an animal to see history.</p>
+            </div>
+
+            <div x-show="recentPredictions.length > 0" class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Anomaly</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disease</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <template x-for="pred in recentPredictions.slice(0, 10)" :key="pred.timestamp">
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm text-gray-600"
+                                    x-text="new Date(pred.timestamp).toLocaleTimeString()"></td>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="pred.device"></td>
+                                <td class="px-4 py-3">
+                                    <span class="px-2 py-1 text-xs rounded-full"
+                                        :class="pred.is_anomaly ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'"
+                                        x-text="pred.is_anomaly ? 'Yes' : 'No'"></span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-900" x-text="pred.disease"></td>
+                                <td class="px-4 py-3 text-sm text-gray-600" x-text="pred.confidence + '%'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function mlDashboard() {
+        return {
+            mlAvailable: false,
+            modelStatus: 'Loading...',
+            totalPredictions: 0,
+            anomaliesDetected: 0,
+            atRiskCount: 0,
+            devices: [],
+            selectedDevice: '',
+            anomalyResult: null,
+            diseaseResult: null,
+            forecastResult: null,
+            recentPredictions: [],
+
+            async init() {
+                await this.checkMLStatus();
+                await this.loadDevices();
+            },
+
+            async checkMLStatus() {
+                try {
+                    const response = await fetch('/api/ml/status');
+                    const data = await response.json();
+
+                    this.mlAvailable = data.ml_available;
+                    this.modelStatus = data.anomaly_detector_loaded ? 'Active' : 'Not Trained';
+
+                    console.log('ML Status:', data);
+                } catch (error) {
+                    console.error('Error checking ML status:', error);
+                    this.mlAvailable = false;
+                }
+            },
+
+            async loadDevices() {
+                try {
+                    const response = await fetch('/api/animals/summary');
+                    const data = await response.json();
+
+                    this.devices = data.animals.map(a => a.device_id);
+                    this.totalPredictions = data.animals.length * 3; // Estimate
+                } catch (error) {
+                    console.error('Error loading devices:', error);
+                }
+            },
+
+            async predictAnomaly() {
+                if (!this.selectedDevice) return;
+
+                try {
+                    const response = await fetch(`/api/ml/predict/anomaly/${this.selectedDevice}`, {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+
+                    this.anomalyResult = data.prediction;
+
+                    if (data.prediction.is_anomaly) {
+                        this.anomaliesDetected++;
+                    }
+
+                    this.addToPredictionHistory('anomaly', data.prediction);
+                } catch (error) {
+                    console.error('Error predicting anomaly:', error);
+                }
+            },
+
+            async predictDisease() {
+                if (!this.selectedDevice) return;
+
+                try {
+                    const response = await fetch(`/api/ml/predict/disease/${this.selectedDevice}`, {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+
+                    this.diseaseResult = data.prediction;
+
+                    if (data.prediction.disease !== 'healthy' && data.prediction.probability > 0.7) {
+                        this.atRiskCount++;
+                    }
+
+                    this.addToPredictionHistory('disease', data.prediction);
+                } catch (error) {
+                    console.error('Error predicting disease:', error);
+                }
+            },
+
+            async forecastHealth() {
+                if (!this.selectedDevice) return;
+
+                try {
+                    const response = await fetch(`/api/ml/forecast/${this.selectedDevice}?hours_ahead=24`);
+                    const data = await response.json();
+
+                    this.forecastResult = data;
+                } catch (error) {
+                    console.error('Error forecasting health:', error);
+                }
+            },
+
+            addToPredictionHistory(type, result) {
+                this.recentPredictions.unshift({
+                    timestamp: new Date().toISOString(),
+                    device: this.selectedDevice,
+                    type: type,
+                    is_anomaly: result.is_anomaly || false,
+                    disease: result.disease || 'N/A',
+                    confidence: Math.round(result.confidence || result.probability * 100 || 0)
+                });
+
+                // Keep only last 50
+                if (this.recentPredictions.length > 50) {
+                    this.recentPredictions = this.recentPredictions.slice(0, 50);
+                }
+            },
+
+            refreshData() {
+                this.init();
+            }
+        };
+    }
+</script>
+{% endblock %}

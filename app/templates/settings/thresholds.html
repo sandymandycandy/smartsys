@@ -1,0 +1,213 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}Alert Thresholds - Smart Pastoralism{% endblock %}
+
+{% block page_content %}
+<div>
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">⚙️ Alert Thresholds</h1>
+        <p class="mt-2 text-sm text-gray-600">Configure when alerts are triggered for your livestock monitoring</p>
+    </div>
+
+    <!-- Success/Error Messages -->
+    {% if request.query_params.get('success') == 'updated' %}
+    <div class="bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center">
+        <span class="text-xl mr-2">✅</span>
+        <span>Threshold updated successfully!</span>
+    </div>
+    {% elif request.query_params.get('success') == 'reset' %}
+    <div class="bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center">
+        <span class="text-xl mr-2">✅</span>
+        <span>All thresholds reset to defaults!</span>
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') %}
+    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
+        <span class="text-xl mr-2">⚠️</span>
+        <span>An error occurred. Please try again.</span>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Threshold Cards -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Temperature Thresholds -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="text-2xl mr-2">🌡️</span> Body Temperature
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for t in thresholds %}
+                    {% if 'temp_' in t.threshold_key and 'ambient' not in t.threshold_key %}
+                    <form action="/settings/thresholds/update" method="post" class="p-4 bg-gray-50 rounded-lg">
+                        <input type="hidden" name="threshold_key" value="{{ t.threshold_key }}">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-700">{{ t.description }}</label>
+                            <span
+                                class="text-xs px-2 py-1 rounded-full {% if 'critical' in t.threshold_key %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                                {% if 'critical' in t.threshold_key %}Critical{% else %}Warning{% endif %}
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="threshold_value" value="{{ t.threshold_value }}" step="0.1"
+                                class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <span class="text-gray-500">{{ t.unit }}</span>
+                            <button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Heart Rate Thresholds -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="text-2xl mr-2">❤️</span> Heart Rate
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for t in thresholds %}
+                    {% if 'hr_' in t.threshold_key %}
+                    <form action="/settings/thresholds/update" method="post" class="p-4 bg-gray-50 rounded-lg">
+                        <input type="hidden" name="threshold_key" value="{{ t.threshold_key }}">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-700">{{ t.description }}</label>
+                            <span
+                                class="text-xs px-2 py-1 rounded-full {% if 'critical' in t.threshold_key %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                                {% if 'critical' in t.threshold_key %}Critical{% else %}Warning{% endif %}
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="threshold_value" value="{{ t.threshold_value }}" step="1"
+                                class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <span class="text-gray-500">{{ t.unit }}</span>
+                            <button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Battery Thresholds -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="text-2xl mr-2">🔋</span> Battery Level
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for t in thresholds %}
+                    {% if 'battery_' in t.threshold_key %}
+                    <form action="/settings/thresholds/update" method="post" class="p-4 bg-gray-50 rounded-lg">
+                        <input type="hidden" name="threshold_key" value="{{ t.threshold_key }}">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-700">{{ t.description }}</label>
+                            <span
+                                class="text-xs px-2 py-1 rounded-full {% if 'critical' in t.threshold_key %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                                {% if 'critical' in t.threshold_key %}Critical{% else %}Warning{% endif %}
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="threshold_value" value="{{ t.threshold_value }}" step="1" min="0"
+                                max="100"
+                                class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <span class="text-gray-500">{{ t.unit }}</span>
+                            <button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Environment Thresholds -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <span class="text-2xl mr-2">🌤️</span> Environment
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for t in thresholds %}
+                    {% if 'ambient_' in t.threshold_key or 'humidity_' in t.threshold_key or 'motion_' in
+                    t.threshold_key %}
+                    <form action="/settings/thresholds/update" method="post" class="p-4 bg-gray-50 rounded-lg">
+                        <input type="hidden" name="threshold_key" value="{{ t.threshold_key }}">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-700">{{ t.description }}</label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="threshold_value" value="{{ t.threshold_value }}" step="0.1"
+                                class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <span class="text-gray-500">{{ t.unit }}</span>
+                            <button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Reset Button -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">🔄 Reset to Defaults</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    Reset all thresholds to their factory default values. This action cannot be undone.
+                </p>
+                <form action="/settings/thresholds/reset" method="post"
+                    onsubmit="return confirm('Are you sure you want to reset all thresholds to defaults?');">
+                    <button type="submit"
+                        class="w-full px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium">
+                        Reset All Thresholds
+                    </button>
+                </form>
+            </div>
+
+            <!-- Change Log -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">📋 Recent Changes</h3>
+                <div class="space-y-3 max-h-80 overflow-y-auto">
+                    {% if change_log %}
+                    {% for log in change_log %}
+                    <div class="p-3 bg-gray-50 rounded-lg text-sm">
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium text-gray-900">{{ log.threshold_key }}</span>
+                            <span class="text-xs text-gray-500">{{ log.changed_at[:16] }}</span>
+                        </div>
+                        <div class="mt-1 text-gray-600">
+                            <span class="text-red-600">{{ log.old_value }}</span>
+                            →
+                            <span class="text-green-600">{{ log.new_value }}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1">by {{ log.changed_by }}</div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-gray-500 text-center py-4">No changes recorded</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Info -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 class="font-semibold text-blue-900 mb-2">ℹ️ How Thresholds Work</h4>
+                <ul class="text-sm text-blue-800 space-y-1">
+                    <li>• <strong>Warning:</strong> Triggers yellow alerts</li>
+                    <li>• <strong>Critical:</strong> Triggers red alerts + notifications</li>
+                    <li>• Changes take effect immediately</li>
+                    <li>• All changes are logged for audit</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

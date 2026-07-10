@@ -1,0 +1,540 @@
+/**
+ * Smart Pastoralism - Enhanced UI/UX
+ * Optimized for Raspberry Pi 5 - Lightweight & Fast
+ * Pure CSS - No heavy dependencies
+ */
+
+/* ============================================
+   PERFORMANCE-OPTIMIZED ANIMATIONS
+   ============================================ */
+
+/* GPU-accelerated transitions */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth page transitions */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Pulse animation for loading states */
+@keyframes pulse-subtle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.loading-pulse {
+    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Shimmer effect for skeleton loaders */
+@keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+}
+
+/* ============================================
+   PREMIUM GRADIENTS (No performance cost)
+   ============================================ */
+
+.gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.gradient-danger {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.gradient-warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.gradient-info {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+/* Mesh gradients for modern look */
+.gradient-mesh {
+    background: 
+        radial-gradient(at 0% 0%, rgba(102, 126, 234, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(118, 75, 162, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.15) 0px, transparent 50%),
+        radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.15) 0px, transparent 50%);
+}
+
+/* ============================================
+   GLASSMORPHISM (Lightweight blur)
+   ============================================ */
+
+.glass {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.glass-dark {
+    background: rgba(31, 41, 55, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   ENHANCED SHADOWS (Depth & Modern)
+   ============================================ */
+
+.shadow-smooth {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 
+                0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.shadow-elevated {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 
+                0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.shadow-premium {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+                0 10px 10px -5px rgba(0, 0, 0, 0.04),
+                0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+/* Colored shadows for cards */
+.shadow-primary {
+    box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.3);
+}
+
+.shadow-success {
+    box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.3);
+}
+
+/* ============================================
+   MICRO-INTERACTIONS (Smooth & Buttery)
+   ============================================ */
+
+.btn-enhanced {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-enhanced:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.2);
+}
+
+.btn-enhanced:active {
+    transform: translateY(0);
+}
+
+/* Ripple effect */
+.btn-enhanced::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn-enhanced:active::after {
+    width: 300px;
+    height: 300px;
+}
+
+/* Card hover effects */
+.card-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Input focus effects */
+.input-enhanced:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    transition: all 0.2s;
+}
+
+/* ============================================
+   STAT CARDS (Premium look)
+   ============================================ */
+
+.stat-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    transition: all 0.3s;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.stat-card:hover::before {
+    opacity: 1;
+}
+
+/* Number counter animation */
+.stat-number {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+/* ============================================
+   PROGRESS BARS (Smooth & Colorful)
+   ============================================ */
+
+.progress-bar {
+    height: 8px;
+    border-radius: 9999px;
+    background: #e5e7eb;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(90deg, 
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    animation: shimmer 2s infinite;
+}
+
+/* ============================================
+   BADGES & PILLS (Modern tags)
+   ============================================ */
+
+.badge-modern {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.badge-modern:hover {
+    transform: scale(1.05);
+}
+
+/* Status indicators */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+    animation: pulse-subtle 2s infinite;
+}
+
+.status-dot.active {
+    background: #10b981;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.status-dot.warning {
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+}
+
+.status-dot.critical {
+    background: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+/* ============================================
+   TABLES (Modern & Clean)
+   ============================================ */
+
+.table-modern tbody tr {
+    transition: background-color 0.2s;
+}
+
+.table-modern tbody tr:hover {
+    background-color: rgba(102, 126, 234, 0.05);
+}
+
+.table-modern th {
+    background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+}
+
+/* ============================================
+   ALERTS & NOTIFICATIONS (Eye-catching)
+   ============================================ */
+
+.alert-modern {
+    border-left: 4px solid;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    display: flex;
+    align-items: start;
+    gap: 0.75rem;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.alert-icon {
+    flex-shrink: 0;
+    font-size: 1.5rem;
+}
+
+/* ============================================
+   LOADING STATES (Beautiful skeletons)
+   ============================================ */
+
+.skeleton-card {
+    background: #f3f4f6;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.skeleton-text {
+    height: 1rem;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    border-radius: 0.25rem;
+    animation: shimmer 2s infinite;
+}
+
+/* ============================================
+   CHARTS & VISUALIZATIONS (Enhanced)
+   ============================================ */
+
+.chart-container {
+    position: relative;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    background: white;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.chart-tooltip {
+    background: rgba(17, 24, 39, 0.9);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    backdrop-filter: blur(10px);
+}
+
+/* ============================================
+   SIDEBAR ENHANCEMENTS
+   ============================================ */
+
+.sidebar-link {
+    transition: all 0.2s;
+    position: relative;
+}
+
+.sidebar-link::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 0;
+    background: #667eea;
+    border-radius: 0 3px 3px 0;
+    transition: height 0.2s;
+}
+
+.sidebar-link:hover::before,
+.sidebar-link.active::before {
+    height: 70%;
+}
+
+/* ============================================
+   FORM INPUTS (Modern & Clean)
+   ============================================ */
+
+.input-modern {
+    border: 2px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s;
+    background: white;
+}
+
+.input-modern:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.input-modern::placeholder {
+    color: #9ca3af;
+}
+
+/* ============================================
+   TOGGLE SWITCHES (Beautiful controls)
+   ============================================ */
+
+.toggle-modern {
+    position: relative;
+    width: 48px;
+    height: 24px;
+    background: #d1d5db;
+    border-radius: 9999px;
+    transition: background 0.2s;
+    cursor: pointer;
+}
+
+.toggle-modern::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .toggle-modern {
+    background: #667eea;
+}
+
+input:checked + .toggle-modern::after {
+    transform: translateX(24px);
+}
+
+/* ============================================
+   RESPONSIVE OPTIMIZATIONS (Mobile-first)
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Reduce animation complexity on mobile */
+    .skeleton {
+        animation: none;
+        background: #f0f0f0;
+    }
+    
+    /* Simplify shadows on mobile */
+    .shadow-premium {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Disable transform effects on touch devices (better performance) */
+    .btn-enhanced:hover {
+        transform: none;
+    }
+}
+
+/* ============================================
+   DARK MODE SUPPORT (Low overhead)
+   ============================================ */
+
+@media (prefers-color-scheme: dark) {
+    .glass {
+        background: rgba(31, 41, 55, 0.8);
+    }
+    
+    .skeleton-text {
+        background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY (WCAG 2.1 AA+)
+   ============================================ */
+
+/* Focus visible for keyboard navigation */
+*:focus-visible {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .shadow-smooth,
+    .shadow-elevated,
+    .shadow-premium {
+        box-shadow: none;
+        border: 2px solid currentColor;
+    }
+}
+
+/* ============================================
+   PRINT STYLES (Bonus feature)
+   ============================================ */
+
+@media print {
+    .gradient-primary,
+    .gradient-success,
+    .gradient-danger {
+        background: white !important;
+        color: black !important;
+    }
+    
+    .shadow-smooth,
+    .shadow-elevated {
+        box-shadow: none !important;
+    }
+}

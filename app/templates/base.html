@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#3B82F6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="description" content="Smart Pastoralism - IoT Livestock Monitoring System">
+    <title>{% block title %}Smart Pastoralism{% endblock %}</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="/static/js/chart.umd.min.js"></script>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="/static/css/leaflet.css" />
+    <script src="/static/js/leaflet.js"></script>
+
+    <!-- Alpine.js for lightweight interactivity -->
+    <script defer src="/static/js/alpine.min.js"></script>
+
+    <!-- Socket.IO Client -->
+    <script src="/static/js/socket.io.min.js"></script>
+
+    <!-- Enhanced UI/UX (RPi5-optimized) -->
+    <link rel="stylesheet" href="/static/css/enhanced.css" />
+
+    <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
+        .leaflet-container {
+            z-index: 1;
+        }
+
+        /* Mobile responsive styles */
+        html,
+        body {
+            -webkit-overflow-scrolling: touch;
+            overflow-x: hidden;
+        }
+
+        /* Safe area for notched devices */
+        .safe-area-bottom {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* Smooth scrolling */
+        * {
+            scroll-behavior: smooth;
+        }
+
+        /* Mobile touch targets */
+        @media (max-width: 768px) {
+
+            button,
+            a,
+            input,
+            select,
+            textarea {
+                min-height: 44px;
+            }
+
+            .grid-cols-4 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        /* Chart responsiveness */
+        canvas {
+            max-width: 100%;
+        }
+
+        /* Table responsiveness */
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body class="h-full">
+    {% block content %}
+    <div class="min-h-full">
+        Default content block
+    </div>
+    {% endblock %}
+
+    <!-- WebSocket Connection -->
+    <script>
+        // Global WebSocket connection
+        let ws = null;
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    console.log('✅ WebSocket connected');
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                };
+
+                ws.onerror = (error) => {
+                    console.error('❌ WebSocket error:', error);
+                };
+
+                ws.onclose = () => {
+                    console.log('🔌 WebSocket disconnected, reconnecting...');
+                    setTimeout(connectWebSocket, 3000);
+                };
+            } catch (error) {
+                console.error('❌ Failed to connect WebSocket:', error);
+                setTimeout(connectWebSocket, 3000);
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            console.log('📦 WebSocket message:', data);
+
+            // Dispatch custom event for components to listen to
+            window.dispatchEvent(new CustomEvent('ws-message', { detail: data }));
+
+            // Handle specific message types
+            if (data.type === 'new_alert') {
+                showNotification('New Alert', data.anomalies ? data.anomalies.join(', ') : 'Check dashboard');
+            }
+        }
+
+        function showNotification(title, message) {
+            // Simple browser notification
+            if ('Notification' in window) {
+                if (Notification.permission === 'granted') {
+                    new Notification(title, { body: message });
+                } else if (Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === 'granted') {
+                            new Notification(title, { body: message });
+                        }
+                    });
+                }
+            }
+        }
+
+        // Connect on page load
+        if (window.location.pathname.includes('/dashboard')) {
+            connectWebSocket();
+        }
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

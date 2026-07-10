@@ -1,0 +1,519 @@
+{% extends "dashboard-base.html" %}
+
+{% block title %}Heatmap - Smart Pastoralism{% endblock %}
+
+{% block extra_head %}
+<style>
+    .legend {
+        background: white;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    .legend-gradient {
+        width: 200px;
+        height: 20px;
+        background: linear-gradient(to right, blue, cyan, lime, yellow, red);
+        border-radius: 4px;
+    }
+
+    #heatmapContainer {
+        border-radius: 0.5rem;
+        height: 600px;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<!-- Load Leaflet 1.7.1 (compatible with leaflet-heat) -->
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<!-- Leaflet.heat plugin -->
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+<div x-data="heatmapDashboard()" x-init="init()">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">🔥 Activity Heatmap</h1>
+        <p class="mt-2 text-sm text-gray-600">Visualize animal activity patterns and health zones across your pasture
+        </p>
+    </div>
+
+    <!-- Controls -->
+    <div class="bg-white rounded-lg shadow-lg p-4 mb-6">
+        <div class="flex flex-wrap items-center gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Data Type</label>
+                <select x-model="dataType" @change="updateHeatmap()"
+                    class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="activity">Activity (Location Density)</option>
+                    <option value="temperature">Body Temperature</option>
+                    <option value="heart_rate">Heart Rate</option>
+                    <option value="alerts">Alert Locations</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Time Range</label>
+                <select x-model="timeRange" @change="updateHeatmap()"
+                    class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="1">Last Hour</option>
+                    <option value="24">Last 24 Hours</option>
+                    <option value="168">Last 7 Days</option>
+                    <option value="720">Last 30 Days</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Intensity</label>
+                <input type="range" x-model="intensity" @input="updateHeatmapStyle()" min="0.1" max="1" step="0.1"
+                    class="w-32">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Radius</label>
+                <input type="range" x-model="radius" @input="updateHeatmapStyle()" min="10" max="50" step="5"
+                    class="w-32">
+            </div>
+            <div class="flex items-end gap-2">
+                <button @click="refreshData()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    🔄 Refresh
+                </button>
+                <button @click="generateDemoData()"
+                    class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">
+                    🔥 Demo Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-3xl">📍</span>
+                <div class="text-right">
+                    <p class="text-sm text-gray-500">Data Points</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="dataPoints">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-3xl">🐄</span>
+                <div class="text-right">
+                    <p class="text-sm text-gray-500">Animals Tracked</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="animalsTracked">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-3xl">🔥</span>
+                <div class="text-right">
+                    <p class="text-sm text-gray-500">Hotspot Zones</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="hotspots">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center justify-between">
+                <span class="text-3xl">📊</span>
+                <div class="text-right">
+                    <p class="text-sm text-gray-500">Coverage</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="coverage + '%'">0%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Container -->
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div id="heatmapContainer" style="height: 600px; width: 100%;"></div>
+    </div>
+
+    <!-- Legend -->
+    <div class="mt-4 flex items-center justify-center gap-4">
+        <span class="text-sm text-gray-600">Low Activity</span>
+        <div class="legend-gradient"></div>
+        <span class="text-sm text-gray-600">High Activity</span>
+    </div>
+
+    <!-- Analysis Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <!-- Activity Distribution -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">📊 Activity Distribution</h3>
+            <div style="position: relative; height: 250px;">
+                <canvas id="activityChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Zone Analysis -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-lg font-semibold mb-4">🗺️ Zone Analysis</h3>
+            <div class="space-y-3" id="zoneAnalysis">
+                <template x-for="zone in zones" :key="zone.name">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 rounded-full mr-3" :style="'background-color:' + zone.color"></div>
+                            <span class="font-medium" x-text="zone.name"></span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-sm text-gray-600" x-text="zone.count + ' readings'"></span>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="zones.length === 0" class="text-gray-500 text-center py-4">No zone data available</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function heatmapDashboard() {
+        // Store chart outside Alpine's reactive data to avoid proxy interference
+        let activityChart = null;
+
+        return {
+            map: null,
+            heatLayer: null,
+            dataType: 'activity',
+            timeRange: '24',
+            intensity: 0.8,
+            radius: 35,
+            dataPoints: 0,
+            animalsTracked: 0,
+            hotspots: 0,
+            coverage: 0,
+            zones: [],
+            heatData: [],
+
+            async init() {
+                console.log('🔥 Initializing heatmap...');
+                await this.waitForLibraries();
+                this.initMap();
+                this.loadData();
+            },
+
+            async waitForLibraries() {
+                // Wait for Leaflet and heatLayer to be available
+                return new Promise((resolve) => {
+                    const check = () => {
+                        if (typeof L !== 'undefined' && typeof L.heatLayer !== 'undefined') {
+                            console.log('✅ Leaflet and heatLayer loaded');
+                            resolve();
+                        } else {
+                            console.log('⏳ Waiting for libraries...', typeof L, typeof L?.heatLayer);
+                            setTimeout(check, 100);
+                        }
+                    };
+                    check();
+
+                    // Timeout after 10 seconds
+                    setTimeout(() => {
+                        if (typeof L === 'undefined' || typeof L.heatLayer === 'undefined') {
+                            console.error('❌ Libraries failed to load');
+                        }
+                        resolve();
+                    }, 10000);
+                });
+            },
+
+            initMap() {
+                try {
+                    // Check if map is already initialized
+                    var container = document.getElementById('heatmapContainer');
+                    if (!container) {
+                        console.error('❌ Heatmap container not found');
+                        return;
+                    }
+                    if (container._leaflet_id) {
+                        console.log('⚠️ Map already initialized');
+                        return;
+                    }
+
+                    console.log('🗺️ Creating map...');
+
+                    // Initialize map
+                    this.map = L.map('heatmapContainer').setView([28.6139, 77.2090], 12);
+
+                    // Add tile layer
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap'
+                    }).addTo(this.map);
+
+                    // Check if heatLayer is available
+                    if (typeof L.heatLayer === 'undefined') {
+                        console.error('❌ L.heatLayer not available');
+                        return;
+                    }
+
+                    // Initialize heat layer with optimized settings
+                    this.heatLayer = L.heatLayer([], {
+                        radius: 40,
+                        blur: 20,
+                        maxZoom: 18,
+                        max: 1.0,
+                        minOpacity: 0.4,
+                        gradient: {
+                            0.0: 'blue',
+                            0.25: 'cyan',
+                            0.5: 'lime',
+                            0.75: 'yellow',
+                            1.0: 'red'
+                        }
+                    }).addTo(this.map);
+
+                    console.log('✅ Map and heatLayer initialized');
+                } catch (error) {
+                    console.error('❌ Map init error:', error);
+                }
+            },
+
+            async loadData() {
+                try {
+                    console.log('📊 Loading heatmap data...');
+
+                    // Try to fetch real location data from API
+                    var response = await fetch('/api/map/locations');
+                    var result = await response.json();
+                    var locations = result.locations || [];
+
+                    console.log('📊 API returned', locations.length, 'locations');
+
+                    // Filter valid locations
+                    var validLocations = locations.filter(function (loc) {
+                        return loc.latitude && loc.longitude &&
+                            loc.latitude !== 0 && loc.longitude !== 0 &&
+                            Math.abs(loc.latitude) <= 90 && Math.abs(loc.longitude) <= 180;
+                    });
+
+                    console.log('📊 Valid locations:', validLocations.length);
+
+                    if (validLocations.length > 5) {
+                        this.processData(validLocations);
+                    } else {
+                        console.log('📊 Not enough real data, using demo data');
+                        this.generateDemoData();
+                    }
+                } catch (error) {
+                    console.error('❌ Error loading heatmap data:', error);
+                    this.generateDemoData();
+                }
+            },
+
+            processData(locations) {
+                console.log('📊 Processing', locations.length, 'locations for heatmap');
+                var self = this;
+
+                // Use passed in locations (already filtered)
+                var validLocations = locations;
+
+                if (validLocations.length === 0) {
+                    console.log('📊 No valid locations, using demo');
+                    this.generateDemoData();
+                    return;
+                }
+
+                // Calculate center
+                var avgLat = validLocations.reduce(function (sum, loc) { return sum + loc.latitude; }, 0) / validLocations.length;
+                var avgLng = validLocations.reduce(function (sum, loc) { return sum + loc.longitude; }, 0) / validLocations.length;
+
+                this.map.setView([avgLat, avgLng], 14);
+
+                // Create heat data based on data type
+                this.heatData = validLocations.map(function (loc) {
+                    var intensity = 0.5;
+
+                    if (self.dataType === 'temperature' && loc.temperature) {
+                        intensity = Math.min(1, (loc.temperature - 35) / 5); // 35-40°C range
+                    } else if (self.dataType === 'heart_rate' && loc.heart_rate) {
+                        intensity = Math.min(1, (loc.heart_rate - 50) / 50); // 50-100 BPM range
+                    }
+
+                    return [loc.latitude, loc.longitude, Math.max(0.2, intensity)];
+                });
+
+                this.heatLayer.setLatLngs(this.heatData);
+
+                // Update stats
+                this.dataPoints = validLocations.length;
+                var deviceSet = new Set(validLocations.map(function (loc) { return loc.device_id; }));
+                this.animalsTracked = deviceSet.size;
+                this.hotspots = Math.max(1, Math.floor(validLocations.length / 10));
+                this.coverage = Math.min(100, Math.floor(validLocations.length * 2));
+
+                // Process zones
+                this.processZones(validLocations);
+                this.renderActivityChart(validLocations);
+            },
+
+            generateDemoData() {
+                var self = this;
+                var baseLat = 28.6139;
+                var baseLng = 77.2090;
+
+                this.map.setView([baseLat, baseLng], 13);
+
+                // Clear existing heat markers
+                if (this.heatMarkers) {
+                    this.heatMarkers.forEach(function (m) { self.map.removeLayer(m); });
+                }
+                this.heatMarkers = [];
+
+                // Hotspot clusters
+                var clusters = [
+                    { lat: baseLat + 0.012, lng: baseLng - 0.015, name: 'Water Source', intensity: 0.95 },
+                    { lat: baseLat - 0.01, lng: baseLng + 0.008, name: 'Shade Area', intensity: 0.75 },
+                    { lat: baseLat + 0.006, lng: baseLng + 0.02, name: 'North Pasture', intensity: 0.85 },
+                    { lat: baseLat - 0.018, lng: baseLng - 0.008, name: 'South Grazing', intensity: 0.65 },
+                    { lat: baseLat, lng: baseLng, name: 'Central Area', intensity: 0.8 }
+                ];
+
+                // Color function
+                function getColor(i) {
+                    if (i > 0.8) return '#FF0000';
+                    if (i > 0.6) return '#FFA500';
+                    if (i > 0.4) return '#FFFF00';
+                    if (i > 0.2) return '#00FF00';
+                    return '#00BFFF';
+                }
+
+                // Draw heat circles
+                clusters.forEach(function (c) {
+                    for (var r = 0; r < 4; r++) {
+                        var circle = L.circle([c.lat, c.lng], {
+                            radius: (4 - r) * 400,
+                            color: getColor(c.intensity - r * 0.15),
+                            fillColor: getColor(c.intensity - r * 0.15),
+                            fillOpacity: 0.2 + r * 0.1,
+                            weight: 0
+                        }).addTo(self.map);
+                        self.heatMarkers.push(circle);
+                    }
+                    // Center marker
+                    var marker = L.circleMarker([c.lat, c.lng], {
+                        radius: 8, color: '#fff', fillColor: getColor(c.intensity), fillOpacity: 1, weight: 2
+                    }).addTo(self.map).bindPopup('<b>' + c.name + '</b><br>Intensity: ' + Math.round(c.intensity * 100) + '%');
+                    self.heatMarkers.push(marker);
+                });
+
+                // Scattered points
+                for (var i = 0; i < 25; i++) {
+                    var lat = baseLat + (Math.random() - 0.5) * 0.04;
+                    var lng = baseLng + (Math.random() - 0.5) * 0.04;
+                    var intensity = 0.3 + Math.random() * 0.5;
+                    var sc = L.circle([lat, lng], {
+                        radius: 200 + Math.random() * 300,
+                        color: getColor(intensity), fillColor: getColor(intensity), fillOpacity: 0.3, weight: 0
+                    }).addTo(self.map);
+                    self.heatMarkers.push(sc);
+                }
+
+                // Update stats
+                this.dataPoints = 250;
+                this.animalsTracked = 6;
+                this.hotspots = clusters.length;
+                this.coverage = 82;
+                this.zones = clusters.map(function (c, i) {
+                    return { name: c.name, color: ['#FF0000', '#FFA500', '#FFFF00', '#00FF00', '#00BFFF'][i], count: Math.round(c.intensity * 50) };
+                });
+                this.renderActivityChart([]);
+                console.log('🔥 Generated circle-based heatmap');
+            },
+
+            processZones(locations) {
+                // Simple clustering by quadrant
+                var zones = {};
+                locations.forEach(function (loc) {
+                    var latBucket = Math.floor(loc.latitude * 100);
+                    var lngBucket = Math.floor(loc.longitude * 100);
+                    var key = 'Zone_' + latBucket + '_' + lngBucket;
+
+                    if (!zones[key]) {
+                        zones[key] = { count: 0 };
+                    }
+                    zones[key].count++;
+                });
+
+                var colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+                var i = 0;
+                this.zones = Object.entries(zones).map(function (entry) {
+                    var key = entry[0];
+                    var val = entry[1];
+                    return {
+                        name: key.replace('_', ' '),
+                        color: colors[i++ % colors.length],
+                        count: val.count
+                    };
+                }).slice(0, 5);
+            },
+
+            renderActivityChart(locations) {
+                var ctx = document.getElementById('activityChart');
+                if (!ctx) return;
+
+                // Destroy existing chart to prevent canvas reuse error
+                if (activityChart) {
+                    activityChart.destroy();
+                }
+
+                // Simple hour distribution
+                var hourCounts = new Array(24).fill(0);
+
+                if (locations.length > 0) {
+                    locations.forEach(function (loc) {
+                        if (loc.timestamp) {
+                            var hour = new Date(loc.timestamp).getHours();
+                            hourCounts[hour]++;
+                        }
+                    });
+                } else {
+                    // Demo data
+                    hourCounts = [5, 3, 2, 1, 1, 2, 8, 15, 20, 18, 15, 12, 10, 12, 15, 18, 20, 22, 18, 12, 8, 6, 5, 4];
+                }
+
+                activityChart = new Chart(ctx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: Array.from({ length: 24 }, function (_, i) { return i + ':00'; }),
+                        datasets: [{
+                            label: 'Activity',
+                            data: hourCounts,
+                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                            borderColor: '#3B82F6',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            },
+
+            updateHeatmap() {
+                this.loadData();
+            },
+
+            updateHeatmapStyle() {
+                if (this.heatLayer) {
+                    this.heatLayer.setOptions({
+                        radius: parseInt(this.radius),
+                        max: parseFloat(this.intensity)
+                    });
+                    this.heatLayer.setLatLngs(this.heatData);
+                }
+            },
+
+            refreshData() {
+                this.loadData();
+            }
+        };
+    }
+</script>
+{% endblock %}
