@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from app.config import settings
 from app.services.lora_service import get_herd_stats
 from app.routes.auth import is_authenticated
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from app.services.health_report import build_pdf, report_link
 from app.services.vet_contact import vet_options, demo_whatsapp_to
 
 router = APIRouter()
@@ -365,7 +366,7 @@ async def animal_detail(request: Request, device_id: str, _: bool = Depends(requ
         "show_sidebar": True
     })
 
-def contact_report(cur, device_id, now):
+def contact_report(cur, device_id, now, base=None):
     """Everything about one animal that goes to a vet: (animal dict, list of current problems)"""
     cur.execute("SELECT * FROM livestock_readings WHERE device_id = ? ORDER BY id DESC LIMIT 1", (device_id,))
     row = cur.fetchone()
@@ -397,8 +398,19 @@ def contact_report(cur, device_id, now):
         "lat": latest.get("latitude"),
         "lng": latest.get("longitude"),
         "history": animal_history(cur, device_id),
+        "report_link": report_link(device_id, base),
     }
     return animal, problems
+
+
+@router.get("/animals/{device_id}/report.pdf")
+def animal_report_pdf(request: Request, device_id: str, _: bool = Depends(require_auth)):
+    """Full health report with graphs and history, as a PDF"""
+    pdf = build_pdf(device_id, report_link(device_id, str(request.base_url)))
+    if not pdf:
+        return JSONResponse({"detail": "Animal not found"}, status_code=404)
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="health-report-{device_id}.pdf"'})
 
 
 @router.get("/animals/{device_id}/vets")
@@ -407,15 +419,22 @@ async def animal_vets(request: Request, device_id: str, _: bool = Depends(requir
     conn = sqlite3.connect(settings.LORA_DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        animal, problems = contact_report(conn.cursor(), device_id, datetime.now())
+        animal, problems = contact_report(conn.cursor(), device_id, datetime.now(), str(request.base_url))
     finally:
         conn.close()
     if not animal:
         return JSONResponse({"detail": "Animal not found"}, status_code=404)
+    near = ", ".join(x for x in [animal["farm"], animal["area"]] if x)
     return {
         "animal": animal["name"] or animal["device_id"],
         "problem": animal["condition"],
+        # Where the distances are measured from: the collar's last GPS position
+        "near": near,
+        "map": f"https://maps.google.com/?q={animal['lat']:.5f},{animal['lng']:.5f}" if animal["lat"] is not None else "",
+        "last_seen": animal["last_seen"],
         "vets": vet_options(animal, problems),
+        "report_pdf": f"/dashboard/animals/{device_id}/report.pdf",
+        "report_link": animal["report_link"],
         "whatsapp_to": demo_whatsapp_to(),
     }
 

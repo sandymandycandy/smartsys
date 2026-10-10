@@ -120,6 +120,10 @@ def main():
     cur.execute("DELETE FROM alerts WHERE resolved = 1")
     cur.execute("SELECT * FROM animal_profiles")
     profiles = {r["device_id"]: dict(r) for r in cur.fetchall()}
+    # Each animal grazes around its own farm (falls back to central Chennai if it has none)
+    cur.execute("""SELECT fa.device_id, f.latitude, f.longitude FROM farm_animals fa JOIN farms f ON f.id = fa.farm_id
+                   WHERE fa.is_active = 1 AND f.latitude IS NOT NULL""")
+    farm_at = {r["device_id"]: (r["latitude"], r["longitude"]) for r in cur.fetchall()}
 
     total = 0
     for device_id in gen.device_ids:
@@ -128,8 +132,9 @@ def main():
         condition = gen.conditions.get(device_id, "healthy")
         episodes = pick_episodes(device_id, is_sheep)
         cur_start = NOW - timedelta(days=CURRENT_START_DAYS.get(condition, 0)) if condition in CURRENT_START_DAYS else None
-        home_lat = CHENNAI_LAT + random.uniform(-0.035, 0.035)
-        home_lon = CHENNAI_LON + random.uniform(-0.035, 0.035)
+        farm_lat, farm_lon = farm_at.get(device_id, (CHENNAI_LAT, CHENNAI_LON))
+        home_lat = farm_lat + random.uniform(-0.004, 0.004)   # within ~400 m of the farm
+        home_lon = farm_lon + random.uniform(-0.004, 0.004)
 
         # History entries
         rows = [(device_id, d.strftime("%Y-%m-%d %H:%M:%S"), t, title, det, v) for d, t, title, det, v in routine_events(device_id, is_sheep, profiles.get(device_id, {}))]
@@ -182,7 +187,7 @@ def main():
             battery = max(8, 100 - (t - last_charge).days * (2.3 if condition == "low_battery" else 1.6))
             readings.append((device_id, int(t.timestamp()), round(max(37.0, min(42.0, temp)), 2), round(max(37.0, min(42.0, temp)), 2),
                              max(45, min(125, hr)), round(max(0.0, min(2.0, motion)), 3),
-                             home_lat + random.uniform(-0.003, 0.003), home_lon + random.uniform(-0.003, 0.003),
+                             home_lat + random.uniform(-0.002, 0.002), home_lon + random.uniform(-0.002, 0.002),
                              int(battery), round(max(30, min(95, humidity)), 1), round(ambient, 1), t.strftime("%Y-%m-%d %H:%M:%S")))
             t += step
         cur.executemany("""INSERT INTO livestock_readings (device_id, timestamp, temperature, body_temperature, heart_rate,

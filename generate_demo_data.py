@@ -7,9 +7,10 @@ import random
 from datetime import datetime, timedelta
 from app.config import settings
 
-# Base location for all mock data — Chennai, India
-CHENNAI_LAT = 13.0827
-CHENNAI_LON = 80.2707
+# Base location for all mock data: Guru Nanak University, Ibrahimpatnam, Hyderabad
+# (the names CHENNAI_LAT/LON are kept so other scripts that import them keep working)
+CHENNAI_LAT = 17.1623
+CHENNAI_LON = 78.6586
 
 class DemoDataGenerator:
     """Generate realistic demo data for all system features"""
@@ -96,47 +97,47 @@ class DemoDataGenerator:
         farms = [
             {
                 'code': 'NORTH-DAIRY',
-                'name': 'Madhavaram Dairy Farm',
-                'location': 'Madhavaram, Chennai',
-                'lat': 13.1480,
-                'lon': 80.2320,
+                'name': 'Ibrahimpatnam Dairy Farm',
+                'location': 'Ibrahimpatnam, Hyderabad',
+                'lat': 17.1916,
+                'lon': 78.6491,
                 'area': 75.5,
                 'owner': 'Rajesh Kumar',
                 'phone': '+91-98400-10101',
-                'email': 'rajesh@madhavaramdairy.in'
+                'email': 'rajesh@ibrahimpatnamdairy.in'
             },
             {
                 'code': 'SOUTH-BREED',
-                'name': 'Tambaram Breeding Site',
-                'location': 'Tambaram, Chennai',
-                'lat': 12.9250,
-                'lon': 80.1270,
+                'name': 'Sheriguda Breeding Site',
+                'location': 'Sheriguda, Hyderabad',
+                'lat': 17.1870,
+                'lon': 78.6630,
                 'area': 120.0,
                 'owner': 'Priya Venkatesan',
                 'phone': '+91-98400-10102',
-                'email': 'priya@tambarambreed.in'
+                'email': 'priya@sheridugabreed.in'
             },
             {
                 'code': 'EAST-YOUNG',
-                'name': 'Sholinganallur Young Stock',
-                'location': 'Sholinganallur, Chennai',
-                'lat': 12.9010,
-                'lon': 80.2270,
+                'name': 'Adibatla Young Stock',
+                'location': 'Adibatla, Hyderabad',
+                'lat': 17.2340,
+                'lon': 78.5570,
                 'area': 45.0,
                 'owner': 'Arun Mohan',
                 'phone': '+91-98400-10103',
-                'email': 'arun@sholingayoung.in'
+                'email': 'arun@adibatlayoung.in'
             },
             {
                 'code': 'WEST-SHEEP',
-                'name': 'Poonamallee Sheep Farm',
-                'location': 'Poonamallee, Chennai',
-                'lat': 13.0480,
-                'lon': 80.0950,
+                'name': 'Turkayamjal Sheep Farm',
+                'location': 'Turkayamjal, Hyderabad',
+                'lat': 17.2722,
+                'lon': 78.5950,
                 'area': 90.0,
                 'owner': 'Lakshmi Narayanan',
                 'phone': '+91-98400-10104',
-                'email': 'lakshmi@poonamalleesheep.in'
+                'email': 'lakshmi@turkayamjalsheep.in'
             }
         ]
 
@@ -146,9 +147,9 @@ class DemoDataGenerator:
             # Update Main Farm
             cursor.execute('''
                 UPDATE farms
-                SET location = 'Guindy, Chennai',
-                    latitude = 13.0067,
-                    longitude = 80.2206,
+                SET location = 'Guru Nanak University, Ibrahimpatnam',
+                    latitude = 17.1623,
+                    longitude = 78.6586,
                     area_hectares = 100.0,
                     owner_name = 'Farm Manager',
                     contact_phone = '+91-98400-10100',
@@ -227,7 +228,7 @@ class DemoDataGenerator:
             issue_start = start_date + timedelta(days=random.randint(35, 50))
             recovered_on = end_date - timedelta(days=random.randint(2, 5))
 
-            # Each animal has a home base spread across the Chennai area (~5 km),
+            # Each animal has a home base spread around the demo base (~5 km),
             # so the map shows animals apart and the heatmap shows real density.
             home_lat = CHENNAI_LAT + random.uniform(-0.035, 0.035)
             home_lon = CHENNAI_LON + random.uniform(-0.035, 0.035)

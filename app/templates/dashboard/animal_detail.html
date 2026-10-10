@@ -34,6 +34,7 @@
     <div class="flex flex-wrap gap-3">
         <button type="button" class="fk-btn" style="background:#1F7A3D;color:#fff"
             onclick="window.dispatchEvent(new CustomEvent('contact-vet', { detail: { id: {{ animal.device_id|tojson|forceescape }} } }))">{{ icon('message', 'w-[18px] h-[18px]') }}Contact a vet</button>
+        <a href="/dashboard/animals/{{ animal.device_id }}/report.pdf" target="_blank" rel="noopener" class="fk-btn fk-btn-ghost">{{ icon('docs', 'w-[18px] h-[18px]') }}PDF report</a>
         {% if farm and farm.contact_phone %}
         <a href="tel:{{ farm.contact_phone }}" class="fk-btn fk-btn-ghost">{{ icon('phone', 'w-[18px] h-[18px]') }}Call {{ farm.owner_name.split()[0] if farm.owner_name and not farm.owner_name.startswith('Farm') else 'farm' }}</a>
         {% endif %}

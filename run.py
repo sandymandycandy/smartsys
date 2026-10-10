@@ -93,6 +93,18 @@ async def landing_page(request: Request):
         "app_name": settings.APP_NAME
     })
 
+@app.get("/r/{token}")
+def shared_report(token: str):
+    """A vet opens the health report from the WhatsApp link, without signing in (link expires)"""
+    from fastapi.responses import Response, HTMLResponse as _Html
+    from app.services.health_report import build_pdf, device_from_token
+    device_id = device_from_token(token)
+    pdf = build_pdf(device_id) if device_id else None
+    if not pdf:
+        return _Html("<p style='font-family:sans-serif'>This report link has expired or is not valid. Ask the farmer to send it again.</p>", status_code=404)
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="health-report-{device_id}.pdf"'})
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""

@@ -56,3 +56,5 @@ temp/
 
 # Local database backups
 *.db.backup-*
+# Signs PDF report share links
+.report_secret

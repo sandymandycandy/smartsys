@@ -17,7 +17,14 @@ import requests
 
 PAWTRACK_API_URL = os.getenv("PAWTRACK_API_URL", "http://localhost:5000/api").rstrip("/")
 _CACHE_SECONDS = 600
+VET_RADIUS_KM = float(os.getenv("VET_RADIUS_KM", "50"))  # only hospitals a farmer could reach
 _cache = {}
+
+
+def _real_phone(phone):
+    """Placeholder numbers like +91-0000000000 (clinics found on OpenStreetMap) can't be called"""
+    digits = re.sub(r"\D", "", phone or "")
+    return len(digits) >= 8 and digits.strip("0") != "" and digits[-10:] != "0" * 10
 
 
 def _fallback_vets():
@@ -34,7 +41,7 @@ def nearby_vets(lat, lng, limit=6):
     if hit and time.time() - hit[0] < _CACHE_SECONDS:
         return hit[1]
     try:
-        res = requests.get(f"{PAWTRACK_API_URL}/clinics", params={"lat": lat, "lng": lng}, timeout=4)
+        res = requests.get(f"{PAWTRACK_API_URL}/clinics", params={"lat": lat, "lng": lng, "radius": VET_RADIUS_KM}, timeout=8)
         res.raise_for_status()
         vets = [{
             "name": c.get("name", "Vet hospital"),
@@ -43,7 +50,7 @@ def nearby_vets(lat, lng, limit=6):
             "distance_km": c.get("distanceKm"),
             "area": c.get("area") or "",
             "open_24h": bool(c.get("isOpen24Hours")),
-        } for c in res.json().get("data", []) if c.get("phone") or c.get("whatsappPhone")][:limit]
+        } for c in res.json().get("data", []) if _real_phone(c.get("phone") or c.get("whatsappPhone"))][:limit]
     except Exception as e:  # PawTrack offline: fall back, and try again on the next request
         print(f"Vet lookup via PawTrack failed: {e}")
         return _fallback_vets()
@@ -145,6 +152,8 @@ def animal_report(a, problems):
         lines.append("Owner: " + " · ".join(x for x in [a.get("owner"), a.get("phone")] if x))
     if a.get("lat") is not None and a.get("lng") is not None:
         lines.append(f"Location: https://maps.google.com/?q={a['lat']:.5f},{a['lng']:.5f}")
+    if a.get("report_link"):
+        lines.append(f"Full report with graphs (PDF): {a['report_link']}")
     lines += history_lines(a.get("history"))
     lines += ["", "Please call back to advise or arrange a visit."]
     return "\n".join(lines)

@@ -51,7 +51,18 @@
                 </div>
                 <button type="button" class="fk-btn fk-btn-ghost fk-btn-sm" @click="close()" aria-label="Close">{{ icon('close', 'w-4 h-4') }}</button>
             </div>
-            <p class="text-sm fk-muted-2 mt-3">Nearest first. WhatsApp opens with the animal's details, vitals and past year's history already written; just press send.</p>
+            <p class="text-sm mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 rounded-lg" style="background:var(--brand-tint);color:var(--brand-hover)" x-show="map" x-cloak>
+                {{ icon('pin', 'w-4 h-4 flex-none') }}
+                <span>Nearest to <strong x-text="(animal || 'the animal') + '’s location'"></strong><span x-show="near" x-text="' near ' + near"></span><span x-show="lastSeen" x-text="' (GPS ' + lastSeen + ' ago)'"></span></span>
+                <a :href="map" target="_blank" rel="noopener" class="underline underline-offset-2 font-semibold">View on map</a>
+            </p>
+            <p class="text-sm fk-muted-2 mt-3">WhatsApp opens with the animal's details, vitals, past year's history and a link to the full PDF report already written; just press send.</p>
+            <div class="flex flex-wrap gap-2 mt-3" x-show="reportPdf" x-cloak>
+                <a class="fk-btn fk-btn-ghost fk-btn-sm" :href="reportPdf" target="_blank" rel="noopener">{{ icon('docs', 'w-4 h-4') }}View PDF report</a>
+                <button type="button" class="fk-btn fk-btn-ghost fk-btn-sm" x-show="canShareFiles" @click="sharePdf()" :disabled="sharing">
+                    {{ icon('message', 'w-4 h-4') }}<span x-text="sharing ? 'Preparing…' : 'Share PDF file'"></span>
+                </button>
+            </div>
             <p class="text-xs mt-2 px-3 py-2 rounded-lg" style="background:var(--prog-tint);color:var(--prog-text)" x-show="whatsappTo" x-cloak>
                 Demo: every WhatsApp message goes to <strong x-text="'+91 ' + whatsappTo"></strong>.
             </p>
@@ -86,13 +97,24 @@
 <script>
     function vetPicker() {
         return {
-            visible: false, loading: false, error: '', vets: [], animal: '', problem: '', whatsappTo: '',
+            visible: false, loading: false, error: '', vets: [], animal: '', problem: '', whatsappTo: '', near: '', map: '', lastSeen: '',
+            reportPdf: '', id: '', sharing: false,
+            // Phones can hand the PDF file itself to WhatsApp
+            canShareFiles: !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'r.pdf', { type: 'application/pdf' })] })),
+            sharePdf: function () {
+                var self = this;
+                this.sharing = true;
+                fetch(this.reportPdf).then(function (r) { return r.blob(); }).then(function (b) {
+                    var file = new File([b], 'health-report-' + self.id + '.pdf', { type: 'application/pdf' });
+                    return navigator.share({ files: [file], title: 'Health report: ' + self.animal });
+                }).catch(function () {}).finally(function () { self.sharing = false; });
+            },
             open: function (id) {
                 var self = this;
-                this.visible = true; this.loading = true; this.error = ''; this.vets = []; this.animal = id; this.problem = '';
+                this.visible = true; this.loading = true; this.error = ''; this.vets = []; this.animal = id; this.id = id; this.reportPdf = ''; this.problem = ''; this.near = ''; this.map = ''; this.lastSeen = '';
                 fetch('/dashboard/animals/' + encodeURIComponent(id) + '/vets')
                     .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
-                    .then(function (d) { self.vets = d.vets; self.animal = d.animal; self.problem = d.problem; self.whatsappTo = d.whatsapp_to; })
+                    .then(function (d) { self.vets = d.vets; self.animal = d.animal; self.problem = d.problem; self.whatsappTo = d.whatsapp_to; self.near = d.near; self.map = d.map; self.lastSeen = d.last_seen; self.reportPdf = d.report_pdf; })
                     .catch(function () { self.error = 'Couldn’t load nearby vets. Check the connection and try again.'; })
                     .finally(function () { self.loading = false; });
             },
