@@ -91,8 +91,18 @@
                         }).addTo(map).bindPopup(self.popup(a));
                         markers[a.device_id].on('click', function () { self.selected = a.device_id; });
                     });
-                    if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
-                    else map.setView([13.0827, 80.2707], 12);
+                    // The home place (Guru Nanak University) is always on the map, with the animals around it
+                    var home = {{ home|tojson }};
+                    L.marker([home.lat, home.lng], {
+                        icon: L.divIcon({
+                            className: '',
+                            html: '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;transform:translate(-14px,-14px)">' +
+                                '<span style="width:28px;height:28px;border-radius:50%;background:#1F2A1F;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 0 0 3px #FFFDF8">&#127979;</span>' +
+                                '<span style="background:#FFFDF8;color:#1F2A1F;font-weight:700;font-size:12px;padding:3px 8px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.25)">' + home.name + '</span></div>'
+                        })
+                    }).addTo(map).bindPopup('<b>' + home.name + '</b>');
+                    if (pts.length) map.fitBounds(pts.concat([[home.lat, home.lng]]), { padding: [50, 50], maxZoom: 15 });
+                    else map.setView([home.lat, home.lng], 15);
 
                     setInterval(function () { self.refresh(); }, 10000);
                     window.addEventListener('ws-message', function (e) {

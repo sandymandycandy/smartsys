@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+import os
 import re
 import sqlite3
 from datetime import datetime, timedelta
@@ -50,6 +51,16 @@ def _condition(message):
     msg = msg.replace("\ufffd", "\u00b0")
     # Long sensor floats -> one decimal: 39.02550597117886 -> 39.0
     return re.sub(r"(\d+\.\d)\d+", r"\1", msg)
+
+
+def gps_or_farm(reading, farm):
+    """The collar's position, or its farm's when the collar has no GPS fix yet (it then sends 0, 0)"""
+    lat, lng = reading.get("latitude"), reading.get("longitude")
+    if lat and lng:
+        return lat, lng, True
+    if farm and farm.get("latitude") and farm.get("longitude"):
+        return farm["latitude"], farm["longitude"], False
+    return None, None, False
 
 
 def herd_lookup(cur):
@@ -184,8 +195,9 @@ def build_overview():
             "battery": reading.get("battery"),
             "last_seen": _ago(seen, now),
             "since": _ago(_parse_time(alerts[0]["alert_time"]), now) if alerts else "",
-            "lat": reading.get("latitude"),
-            "lng": reading.get("longitude"),
+            "lat": gps_or_farm(reading, farm)[0],
+            "lng": gps_or_farm(reading, farm)[1],
+            "gps_fix": gps_or_farm(reading, farm)[2],
         })
     order = {"critical": 0, "watch": 1, "recovering": 2, "healthy": 3}
     animals.sort(key=lambda a: (order[a["status"]], a["device_id"]))
@@ -395,8 +407,9 @@ def contact_report(cur, device_id, now, base=None):
         "area": (farm.get("location") or "").split(",")[0] if farm else "",
         "owner": farm.get("owner_name") if farm else "",
         "phone": farm.get("contact_phone") if farm else "",
-        "lat": latest.get("latitude"),
-        "lng": latest.get("longitude"),
+        "lat": gps_or_farm(latest, farm)[0],
+        "lng": gps_or_farm(latest, farm)[1],
+        "gps_fix": gps_or_farm(latest, farm)[2],
         "history": animal_history(cur, device_id),
         "report_link": report_link(device_id, base),
     }
@@ -428,8 +441,8 @@ async def animal_vets(request: Request, device_id: str, _: bool = Depends(requir
     return {
         "animal": animal["name"] or animal["device_id"],
         "problem": animal["condition"],
-        # Where the distances are measured from: the collar's last GPS position
-        "near": near,
+        # Where the distances are measured from: the collar's last GPS position (or its farm, without a fix)
+        "near": near if animal["gps_fix"] else f"{near} (collar has no GPS fix, using the farm)",
         "map": f"https://maps.google.com/?q={animal['lat']:.5f},{animal['lng']:.5f}" if animal["lat"] is not None else "",
         "last_seen": animal["last_seen"],
         "vets": vet_options(animal, problems),
@@ -447,9 +460,16 @@ async def live_map(request: Request, _: bool = Depends(require_auth)):
     except Exception as e:
         print(f"Error loading animals for map: {e}")
         animals = []
+    # The place the map is centred on and always marks (MAP_HOME_* in .env; default Guru Nanak University)
+    home = {
+        "name": os.getenv("MAP_HOME_NAME", "Guru Nanak University"),
+        "lat": float(os.getenv("MAP_HOME_LAT", "17.1623")),
+        "lng": float(os.getenv("MAP_HOME_LNG", "78.6586")),
+    }
     return templates.TemplateResponse("dashboard/map.html", {
         "request": request,
         "animals": animals,
+        "home": home,
         "show_sidebar": True
     })
 

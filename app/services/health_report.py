@@ -114,9 +114,11 @@ def gather(device_id):
             return None
         latest = latest[0]
         end = datetime.fromisoformat(latest["received_time"])
-        profile = (_q(cur, "SELECT * FROM animal_profiles WHERE device_id = ?", (device_id,)) or [{}])[0]
+        has = lambda t: bool(_q(cur, "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (t,)))
+        # Older databases may not have profiles or farms yet
+        profile = (_q(cur, "SELECT * FROM animal_profiles WHERE device_id = ?", (device_id,)) or [{}])[0] if has("animal_profiles") else {}
         farm = (_q(cur, """SELECT f.* FROM farms f JOIN farm_animals fa ON fa.farm_id = f.id
-                           WHERE fa.device_id = ? AND fa.is_active = 1""", (device_id,)) or [{}])[0]
+                           WHERE fa.device_id = ? AND fa.is_active = 1""", (device_id,)) or [{}])[0] if has("farm_animals") else {}
         day = _q(cur, """SELECT received_time t, COALESCE(body_temperature, temperature) temp, heart_rate hr, motion_magnitude motion
                          FROM livestock_readings WHERE device_id = ? AND received_time > ? ORDER BY id""",
                  (device_id, (end - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")))
@@ -257,6 +259,8 @@ def build_pdf(device_id, link=None):
     hr = latest.get("heart_rate")
     open_alerts = [a for a in d["alerts"] if not a["resolved"]]
     lat, lng = latest.get("latitude"), latest.get("longitude")
+    if not (lat and lng) and f.get("latitude"):  # no GPS fix yet: the collar sends 0, 0
+        lat, lng = f["latitude"], f["longitude"]
     map_url = f"https://maps.google.com/?q={lat:.5f},{lng:.5f}" if lat is not None else ""
 
     def table(rows, widths, header=True, zebra=True):
