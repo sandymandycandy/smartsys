@@ -52,7 +52,13 @@ def _secret():
         return s.encode()
     path = Path(settings.LORA_DB_PATH).resolve().parent / ".report_secret"
     if not path.exists():
-        path.write_text(secrets.token_urlsafe(32))
+        # Owner-only from the moment it is created (O_EXCL: never reuse a file someone else planted)
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(secrets.token_urlsafe(32))
+        except FileExistsError:
+            pass  # created by another worker in the meantime
     return path.read_text().strip().encode()
 
 
