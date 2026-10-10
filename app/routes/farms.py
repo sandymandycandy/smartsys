@@ -5,9 +5,41 @@ from pydantic import BaseModel
 from typing import Optional
 from app.services.farm_management import farm_service
 from app.routes.auth import is_authenticated
+from app.routes.dashboard import build_overview
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+def _herd_by_farm():
+    """Animals from the overview, grouped by farm name"""
+    try:
+        overview = build_overview()
+    except Exception as e:
+        print(f"Error building herd data: {e}")
+        return {}
+    grouped = {}
+    for a in overview["animals"]:
+        grouped.setdefault(a["farm"], []).append(a)
+    return grouped
+
+
+def _farm_health(animals):
+    """Counts and overall state for one farm's herd"""
+    critical = sum(1 for a in animals if a["status"] == "critical")
+    watch = sum(1 for a in animals if a["status"] in ("watch", "recovering"))
+    healthy = sum(1 for a in animals if a["status"] == "healthy")
+    temps = [a["temp"] for a in animals if a["temp"]]
+    return {
+        "herd": len(animals),
+        "critical": critical,
+        "watch": watch,
+        "healthy": healthy,
+        "healthy_pct": round(100 * healthy / len(animals)) if animals else None,
+        "avg_temp": round(sum(temps) / len(temps), 1) if temps else None,
+        "low_battery": sum(1 for a in animals if (a["battery"] or 100) < 50),
+        "state": "critical" if critical else ("watch" if watch else ("healthy" if animals else "empty")),
+    }
+
 
 def require_auth(request: Request):
     """Dependency to require authentication"""
@@ -45,10 +77,15 @@ class AnimalAssignment(BaseModel):
 async def farms_list(request: Request, _: bool = Depends(require_auth)):
     """Farms management page"""
     farms = farm_service.get_all_farms()
-    
+    herd = _herd_by_farm()
+    for f in farms:
+        f["health"] = _farm_health(herd.get(f["farm_name"], []))
+    unassigned = herd.get("Unassigned", [])
+
     return templates.TemplateResponse("farms/list.html", {
         "request": request,
         "farms": farms,
+        "unassigned": unassigned,
         "show_sidebar": True
     })
 
@@ -59,25 +96,32 @@ async def farm_detail(request: Request, farm_id: int, _: bool = Depends(require_
     if not farm:
         raise HTTPException(status_code=404, detail="Farm not found")
     
-    animals = farm_service.get_farm_animals(farm_id)
-    stats = farm_service.get_farm_stats(farm_id)
-    
+    herd = _herd_by_farm()
+    animals = herd.get(farm["farm_name"], [])
+    unassigned = [a["device_id"] for a in herd.get("Unassigned", [])]
+
     return templates.TemplateResponse("farms/detail.html", {
         "request": request,
         "farm": farm,
         "animals": animals,
-        "stats": stats,
+        "health": _farm_health(animals),
+        "unassigned": unassigned,
         "show_sidebar": True
     })
 
 @router.get("/compare/all", response_class=HTMLResponse)
 async def farms_comparison(request: Request, _: bool = Depends(require_auth)):
     """Compare all farms"""
-    comparison = farm_service.compare_farms()
-    
+    farms = farm_service.get_all_farms()
+    herd = _herd_by_farm()
+    for f in farms:
+        f["health"] = _farm_health(herd.get(f["farm_name"], []))
+        area = f.get("area_hectares") or 0
+        f["density"] = round(f["health"]["herd"] / area, 2) if area else None
+
     return templates.TemplateResponse("farms/comparison.html", {
         "request": request,
-        "farms": comparison,
+        "farms": farms,
         "show_sidebar": True
     })
 

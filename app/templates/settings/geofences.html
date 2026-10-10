@@ -1,289 +1,176 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}Geofence Management - Smart Pastoralism{% endblock %}
-
-{% block head_extra %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-<style>
-    /* ... css remains ... */
-    #geofenceMap {
-        height: 100%;
-        width: 100%;
-        border-radius: 0.5rem;
-        background: #e5e7eb;
-        z-index: 1;
-    }
-
-    .leaflet-container {
-        height: 100%;
-        width: 100%;
-    }
-</style>
-{% endblock %}
+{% block title %}Geofences · PawTrack{% endblock %}
 
 {% block page_content %}
 <!-- Leaflet + Leaflet.draw (compatible versions) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
 <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<style>
+    #geofenceMap { height: 100%; width: 100%; background: #EAE3D5; z-index: 1; }
+</style>
+
 <div x-data="geofenceManager()" x-init="init()">
-    <div class="mb-8 flex items-center justify-between">
+    <header class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-7">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900">🗺️ Geofence Management</h1>
-            <p class="mt-2 text-sm text-gray-600">Define virtual boundaries and monitor animal locations</p>
+            <p class="fk-eyebrow">System</p>
+            <h1 class="fk-h1 mt-2">Where the herd may roam</h1>
+            <p class="fk-muted mt-2">
+                <span x-text="geofences.filter(g => g.enabled).length"></span> active
+                <span x-text="geofences.filter(g => g.enabled).length === 1 ? 'fence covers' : 'fences cover'"></span>
+                <span x-text="totalCoverage"></span> km². An animal that steps outside one raises an alert.
+            </p>
         </div>
-        <button @click="showCreateForm = true"
-            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-            ➕ Create Geofence
-        </button>
-    </div>
-
-    <!-- Success/Error Messages -->
-    <div x-show="successMessage" x-transition class="bg-green-50 border-l-4 border-green-500 p-4 mb-6 rounded-lg">
-        <div class="flex items-center">
-            <span class="text-2xl mr-3">✅</span>
-            <p class="text-green-700" x-text="successMessage"></p>
+        <div class="flex gap-3">
+            <button @click="startDrawing()" class="fk-btn fk-btn-ghost">{{ icon('fence', 'w-[18px] h-[18px]') }}Draw on map</button>
+            <button @click="startNewGeofence()" class="fk-btn fk-btn-primary">{{ icon('plus', 'w-[18px] h-[18px]') }}New geofence</button>
         </div>
-    </div>
+    </header>
 
-    <div x-show="errorMessage" x-transition class="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-lg">
-        <div class="flex items-center">
-            <span class="text-2xl mr-3">❌</span>
-            <p class="text-red-700" x-text="errorMessage"></p>
+    <p class="fk-notice fk-notice-ok mb-6" x-show="successMessage" x-text="successMessage" x-cloak role="status"></p>
+    <p class="fk-notice fk-notice-err mb-6" x-show="errorMessage" x-text="errorMessage" x-cloak role="alert"></p>
+
+    <section class="fk-card fk-kpis mb-7" aria-label="Geofences at a glance">
+        <div>
+            <p class="fk-eyebrow">Geofences</p>
+            <p class="fk-kpi mt-3" x-text="geofences.length">0</p>
+            <p class="text-sm fk-muted-2 mt-2"><span x-text="geofences.filter(g => !g.enabled).length"></span> paused</p>
         </div>
-    </div>
-
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-blue-100 text-sm font-medium">Total Geofences</p>
-                    <p class="text-3xl font-bold mt-1" x-text="geofences.length"></p>
-                </div>
-                <span class="text-4xl opacity-80">🗺️</span>
-            </div>
+        <div>
+            <p class="fk-eyebrow">Active</p>
+            <p class="fk-kpi mt-3" x-text="geofences.filter(g => g.enabled).length">0</p>
+            <p class="text-sm fk-muted-2 mt-2"><span x-text="geofences.filter(g => g.notification_enabled).length"></span> send alerts</p>
         </div>
-
-        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-green-100 text-sm font-medium">Active Fences</p>
-                    <p class="text-3xl font-bold mt-1" x-text="geofences.filter(g => g.enabled).length"></p>
-                </div>
-                <span class="text-4xl opacity-80">✅</span>
-            </div>
+        <div>
+            <p class="fk-eyebrow">Breaks, 24h</p>
+            <p class="fk-kpi mt-3" x-text="violationsCount" :style="violationsCount > 0 ? 'color:var(--emerg)' : ''">0</p>
+            <p class="text-sm fk-muted-2 mt-2">animals that left a fence</p>
         </div>
-
-        <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-red-100 text-sm font-medium">Violations (24h)</p>
-                    <p class="text-3xl font-bold mt-1" x-text="violationsCount"></p>
-                </div>
-                <span class="text-4xl opacity-80">🚨</span>
-            </div>
+        <div>
+            <p class="fk-eyebrow">Coverage</p>
+            <p class="fk-kpi mt-3"><span x-text="totalCoverage">0</span><span class="text-xl align-top ml-0.5">km²</span></p>
+            <p class="text-sm fk-muted-2 mt-2">area inside active fences</p>
         </div>
+    </section>
 
-        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-purple-100 text-sm font-medium">Total Coverage</p>
-                    <p class="text-3xl font-bold mt-1" x-text="totalCoverage + ' km²'"></p>
-                </div>
-                <span class="text-4xl opacity-80">📏</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Map and Form Layout -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="grid gap-7 xl:grid-cols-[minmax(0,1fr)_360px] mb-7">
         <!-- Map -->
-        <div class="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold">📍 Interactive Map</h3>
-                <button @click="startDrawing()"
-                    class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-medium transition flex items-center">
-                    <span class="mr-1">✏️</span> Draw Boundary
-                </button>
+        <section class="fk-card overflow-hidden min-w-0" aria-labelledby="map-h">
+            <div class="flex flex-wrap items-center justify-between gap-2 px-5 pt-5 pb-3">
+                <h2 id="map-h" class="fk-h2">Map</h2>
+                <div class="flex items-center gap-4 text-xs fk-muted">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#3F7D2A"></span>Active</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#7A929D"></span>Paused</span>
+                </div>
             </div>
+            <div class="relative border-t" style="height: 520px; border-color: var(--line)">
+                <div x-show="!map" class="absolute inset-0 flex items-center justify-center z-20" style="background:var(--line-soft)">
+                    <p class="fk-muted">Loading map</p>
+                </div>
+                <div id="geofenceMap" class="z-10"></div>
+            </div>
+            <p class="px-5 py-3 text-sm fk-muted-2 border-t" style="border-color:var(--line-soft)">Click the map to drop a circle fence, or use "Draw on map" for a custom shape.</p>
+        </section>
 
-            <!-- Map Container with Loading State -->
-            <!-- Map Container with Loading State -->
-            <div class="relative" style="height: 500px;">
-                <!-- Loading Spinner -->
-                <div x-show="!map"
-                    class="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-20">
-                    <div class="text-center">
-                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                        <p class="text-gray-600">Loading map...</p>
+        <!-- Form -->
+        <section id="geofenceForm" class="fk-card fk-card-pad min-w-0" aria-labelledby="form-h">
+            <p class="fk-eyebrow" x-text="editingFence ? 'Editing' : 'New'"></p>
+            <h2 id="form-h" class="fk-h2 mt-1" x-text="editingFence ? formData.name || 'Geofence' : 'New geofence'"></h2>
+
+            <form @submit.prevent="saveGeofence()" class="space-y-4 mt-5">
+                <div>
+                    <label class="fk-label" for="fenceName">Name</label>
+                    <input id="fenceName" type="text" x-model="formData.name" required placeholder="North pasture" class="fk-input">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="fk-label" for="g-lat">Centre lat</label>
+                        <input id="g-lat" type="number" step="any" x-model="formData.center_lat" required class="fk-input fk-mono">
+                    </div>
+                    <div>
+                        <label class="fk-label" for="g-lng">Centre lng</label>
+                        <input id="g-lng" type="number" step="any" x-model="formData.center_lng" required class="fk-input fk-mono">
                     </div>
                 </div>
-
-                <!-- Actual Map Div -->
-                <div id="geofenceMap" class="w-full h-full rounded-lg z-10"></div>
-            </div>
-
-            <div class="mt-4 flex items-center justify-between text-sm text-gray-600">
-                <p>💡 Click on map to create geofence</p>
-                <p>🔵 Blue circles = Active | 🔴 Red circles = Inactive</p>
-            </div>
-        </div>
-
-        <!-- Create/Edit Form -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-lg font-semibold mb-4">
-                <span x-text="editingFence ? '✏️ Edit Geofence' : '➕ Create Geofence'"></span>
-            </h3>
-
-            <form @submit.prevent="saveGeofence()" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Fence Name</label>
-                    <input type="text" x-model="formData.name" required placeholder="e.g., North Pasture"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <label class="fk-label" for="g-r">Radius</label>
+                    <div class="relative">
+                        <input id="g-r" type="number" x-model="formData.radius_meters" required min="10" class="fk-input fk-mono pr-10">
+                        <span class="absolute right-3 top-1/2 -translate-y-1/2 fk-mono text-xs fk-muted-2">m</span>
+                    </div>
+                    <p class="fk-hint"><span x-text="(formData.radius_meters / 1000).toFixed(2)"></span> km across the radius</p>
                 </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Center Latitude</label>
-                    <input type="number" step="any" x-model="formData.center_lat" required placeholder="e.g., 28.6139"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Center Longitude</label>
-                    <input type="number" step="any" x-model="formData.center_lng" required placeholder="e.g., 77.2090"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Radius (meters)</label>
-                    <input type="number" x-model="formData.radius_meters" required min="10" placeholder="e.g., 500"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">Current: <span
-                            x-text="(formData.radius_meters / 1000).toFixed(2)"></span> km</p>
-                </div>
-
-                <div class="flex items-center space-x-3">
-                    <label class="flex items-center cursor-pointer">
-                        <input type="checkbox" x-model="formData.enabled"
-                            class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500">
-                        <span class="ml-2 text-sm text-gray-700">Enabled</span>
+                <div class="space-y-3 pt-1">
+                    <label class="flex items-center justify-between gap-3 cursor-pointer">
+                        <span><span class="text-sm font-semibold block">Active</span><span class="text-xs fk-muted-2">Check animals against this fence</span></span>
+                        <span class="fk-switch"><input type="checkbox" x-model="formData.enabled"><span></span></span>
                     </label>
-
-                    <label class="flex items-center cursor-pointer">
-                        <input type="checkbox" x-model="formData.notification_enabled"
-                            class="w-5 h-5 text-purple-600 rounded focus:ring-purple-500">
-                        <span class="ml-2 text-sm text-gray-700">Send Alerts</span>
+                    <label class="flex items-center justify-between gap-3 cursor-pointer">
+                        <span><span class="text-sm font-semibold block">Send alerts</span><span class="text-xs fk-muted-2">Notify people when an animal leaves</span></span>
+                        <span class="fk-switch"><input type="checkbox" x-model="formData.notification_enabled"><span></span></span>
                     </label>
                 </div>
-
-                <div class="flex gap-2">
-                    <button type="submit"
-                        class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                        <span x-text="editingFence ? 'Update' : 'Create'"></span>
-                    </button>
-                    <button type="button" @click="cancelEdit()"
-                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition">
-                        Cancel
-                    </button>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="fk-btn fk-btn-primary flex-1"><span x-text="editingFence ? 'Save changes' : 'Create geofence'"></span></button>
+                    <button type="button" @click="cancelEdit()" class="fk-btn fk-btn-ghost">Cancel</button>
                 </div>
             </form>
-        </div>
+        </section>
     </div>
 
-    <!-- Geofences Table -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
-        <h3 class="text-lg font-semibold mb-4">📋 All Geofences</h3>
+    <div class="grid gap-7 xl:grid-cols-2">
+        <!-- Fence list -->
+        <section class="fk-card min-w-0" aria-labelledby="list-h">
+            <div class="px-5 pt-5 pb-3"><h2 id="list-h" class="fk-h2">All geofences</h2></div>
+            <p class="px-5 pb-6 fk-muted" x-show="geofences.length === 0">No geofences yet. Click the map or press "New geofence".</p>
+            <div class="overflow-x-auto border-t" style="border-color:var(--line)" x-show="geofences.length > 0">
+                <table class="fk-table">
+                    <thead><tr><th>Name</th><th class="text-right">Radius</th><th>Status</th><th>Alerts</th><th></th></tr></thead>
+                    <tbody>
+                        <template x-for="fence in geofences" :key="fence.id">
+                            <tr>
+                                <td>
+                                    <span class="font-semibold" x-text="fence.name"></span>
+                                    <span class="block fk-mono text-[11px] fk-muted-2" x-text="fence.center_lat.toFixed(4) + ', ' + fence.center_lng.toFixed(4)"></span>
+                                </td>
+                                <td class="text-right fk-mono text-[13px] whitespace-nowrap" x-text="fence.radius_meters >= 1000 ? (fence.radius_meters / 1000).toFixed(1) + ' km' : Math.round(fence.radius_meters) + ' m'"></td>
+                                <td><span class="fk-tag" :class="fence.enabled ? 'fk-tag-done' : 'fk-tag-plain'" x-text="fence.enabled ? 'Active' : 'Paused'"></span></td>
+                                <td class="text-sm" :class="fence.notification_enabled ? '' : 'fk-muted-2'" x-text="fence.notification_enabled ? 'On' : 'Off'"></td>
+                                <td class="text-right whitespace-nowrap">
+                                    <button @click="editFence(fence)" class="fk-btn fk-btn-quiet fk-btn-sm">Edit</button>
+                                    <button @click="deleteFence(fence.id)" class="fk-btn fk-btn-quiet fk-btn-sm">Delete</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-        <div x-show="geofences.length === 0" class="text-center py-8 text-gray-400">
-            <span class="text-4xl">🗺️</span>
-            <p class="mt-2">No geofences created yet. Click "Create Geofence" to get started.</p>
-        </div>
-
-        <div x-show="geofences.length > 0" class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Radius</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alerts</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    <template x-for="fence in geofences" :key="fence.id">
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="fence.name"></td>
-                            <td class="px-4 py-3 text-sm text-gray-600">
-                                <span x-text="fence.center_lat.toFixed(4) + ', ' + fence.center_lng.toFixed(4)"></span>
-                            </td>
-                            <td class="px-4 py-3 text-sm text-gray-600">
-                                <span x-text="fence.radius_meters + ' m'"></span>
-                            </td>
-                            <td class="px-4 py-3">
-                                <span class="px-2 py-1 text-xs rounded-full"
-                                    :class="fence.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
-                                    x-text="fence.enabled ? 'Active' : 'Inactive'"></span>
-                            </td>
-                            <td class="px-4 py-3">
-                                <span class="px-2 py-1 text-xs rounded-full"
-                                    :class="fence.notification_enabled ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'"
-                                    x-text="fence.notification_enabled ? 'On' : 'Off'"></span>
-                            </td>
-                            <td class="px-4 py-3 text-sm space-x-2">
-                                <button @click="editFence(fence)"
-                                    class="text-blue-600 hover:text-blue-800">Edit</button>
-                                <button @click="deleteFence(fence.id)"
-                                    class="text-red-600 hover:text-red-800">Delete</button>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Recent Violations -->
-    <div class="mt-8 bg-white rounded-lg shadow-lg p-6">
-        <h3 class="text-lg font-semibold mb-4">🚨 Recent Violations</h3>
-
-        <div x-show="violations.length === 0" class="text-center py-8 text-gray-400">
-            <span class="text-4xl">✅</span>
-            <p class="mt-2">No geofence violations detected</p>
-        </div>
-
-        <div x-show="violations.length > 0" class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Geofence</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Distance Out</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alert Sent</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    <template x-for="v in violations.slice(0, 10)" :key="v.id">
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 text-sm text-gray-600"
-                                x-text="new Date(v.violated_at).toLocaleString()"></td>
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="v.device_id"></td>
-                            <td class="px-4 py-3 text-sm text-gray-600" x-text="v.geofence_name"></td>
-                            <td class="px-4 py-3 text-sm text-orange-600"
-                                x-text="Math.round(v.distance_from_fence) + ' m'"></td>
-                            <td class="px-4 py-3">
-                                <span class="px-2 py-1 text-xs rounded-full"
-                                    :class="v.alert_sent ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
-                                    x-text="v.alert_sent ? 'Yes' : 'No'"></span>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
+        <!-- Violations -->
+        <section class="fk-card min-w-0" aria-labelledby="viol-h">
+            <div class="px-5 pt-5 pb-3"><h2 id="viol-h" class="fk-h2">Recent breaks</h2></div>
+            <div class="px-5 pb-8 pt-2 text-center" x-show="violations.length === 0">
+                <span class="inline-flex w-10 h-10 rounded-full items-center justify-center" style="background:var(--brand-tint);color:var(--brand)">{{ icon('check', 'w-5 h-5') }}</span>
+                <p class="font-semibold mt-3">Everyone stayed inside.</p>
+            </div>
+            <ul class="border-t" style="border-color:var(--line-soft)" x-show="violations.length > 0">
+                <template x-for="v in violations.slice(0, 10)" :key="v.id">
+                    <li class="fk-alert sev-critical flex items-center gap-3">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-semibold">
+                                <a :href="'/dashboard/animals/' + v.device_id" class="hover:underline" x-text="v.device_id"></a>
+                                <span class="font-normal fk-muted" x-text="' left ' + v.geofence_name"></span>
+                            </p>
+                            <p class="fk-mono text-[11px] fk-muted-2 mt-0.5" x-text="new Date(v.violated_at).toLocaleString() + ' · ' + Math.round(v.distance_from_fence) + ' m outside'"></p>
+                        </div>
+                        <span class="fk-tag" :class="v.alert_sent ? 'fk-tag-done' : 'fk-tag-plain'" x-text="v.alert_sent ? 'Alert sent' : 'No alert'"></span>
+                    </li>
+                </template>
+            </ul>
+        </section>
     </div>
 </div>
 
@@ -298,7 +185,6 @@
             successMessage: '',
             errorMessage: '',
             editingFence: null,
-            showCreateForm: false,
             formData: {
                 name: '',
                 center_lat: 0,
@@ -389,7 +275,7 @@
                                     polygon: {
                                         allowIntersection: false,
                                         showArea: true,
-                                        shapeOptions: { color: '#3b82f6' }
+                                        shapeOptions: { color: '#3F7D2A' }
                                     },
                                     rectangle: true,
                                     circle: true,
@@ -432,7 +318,7 @@
                                     this.formData.coordinates = latlngs.map(ll => [ll.lat, ll.lng]);
                                     this.formData.shape_type = type;
 
-                                    console.log("📍 Shape drawn:", this.formData.coordinates);
+                                    console.log("Shape drawn:", this.formData.coordinates);
                                 }
                             });
 
@@ -440,12 +326,12 @@
                             this.map.on(L.Draw.Event.DRAWSTART, () => { this.isDrawing = true; });
                             this.map.on(L.Draw.Event.DRAWSTOP, () => { this.isDrawing = false; });
 
-                            console.log('✅ Drawing tools initialized');
+                            console.log('Drawing tools initialized');
                         } else {
-                            console.warn('⚠️ Leaflet Draw library not found. Drawing disabled.');
+                            console.warn('Leaflet Draw library not found. Drawing disabled.');
                         }
                     } catch (drawError) {
-                        console.error('⚠️ Drawing tools failed to init:', drawError);
+                        console.error('Drawing tools failed to init:', drawError);
                         // Continue execution - do not crash map
                     }
 
@@ -460,7 +346,7 @@
 
                         // Another check: If user clicked the "Draw Boundary" button recently
 
-                        console.log('📍 Map clicked (Simple Mode):', e.latlng);
+                        console.log('Map clicked (Simple Mode):', e.latlng);
                         this.formData.center_lat = e.latlng.lat;
                         this.formData.center_lng = e.latlng.lng;
                         this.formData.shape_type = 'circle';
@@ -481,9 +367,9 @@
                         }
                     }, 100);
 
-                    console.log('✅ Map initialized with Drawing Tools');
+                    console.log('Map initialized with Drawing Tools');
                 } catch (error) {
-                    console.error('❌ Map initialization error:', error);
+                    console.error('Map initialization error:', error);
                     this.showError('Failed to initialize map. Please refresh the page.');
                 }
             },
@@ -505,7 +391,7 @@
                         const polygonDrawer = new L.Draw.Polygon(this.map, {
                             allowIntersection: false,
                             showArea: true,
-                            shapeOptions: { color: '#3b82f6' }
+                            shapeOptions: { color: '#3F7D2A' }
                         });
                         polygonDrawer.enable();
                         this.isDrawing = true;
@@ -536,7 +422,7 @@
                     const saved = localStorage.getItem('smartpastoral_geofences');
                     if (saved) {
                         this.geofences = JSON.parse(saved);
-                        console.log('📍 Loaded', this.geofences.length, 'geofences from storage');
+                        console.log('Loaded', this.geofences.length, 'geofences from storage');
                     } else {
                         this.geofences = [];
                     }
@@ -554,16 +440,16 @@
                 try {
                     const dataToSave = JSON.stringify(this.geofences);
                     localStorage.setItem('smartpastoral_geofences', dataToSave);
-                    console.log('💾 Saved', this.geofences.length, 'geofences to storage');
-                    console.log('💾 Data:', dataToSave);
+                    console.log('Saved', this.geofences.length, 'geofences to storage');
+                    console.log('Data:', dataToSave);
 
                     // Verify it was saved
                     const verify = localStorage.getItem('smartpastoral_geofences');
                     if (verify) {
-                        console.log('✅ Storage verified:', JSON.parse(verify).length, 'items');
+                        console.log('Storage verified:', JSON.parse(verify).length, 'items');
                     }
                 } catch (error) {
-                    console.error('❌ Error saving geofences:', error);
+                    console.error('Error saving geofences:', error);
                     alert('Error saving: ' + error.message);
                 }
             },
@@ -591,7 +477,7 @@
                 // Draw each geofence
                 this.geofences.forEach(fence => {
                     let layer;
-                    const color = fence.enabled ? '#3b82f6' : '#ef4444';
+                    const color = fence.enabled ? '#3F7D2A' : '#7A929D';
                     const options = {
                         color: color,
                         fillColor: color,
@@ -613,7 +499,7 @@
                     }
 
                     layer.addTo(this.map);
-                    layer.bindPopup(`<b>${fence.name}</b><br>Type: ${fence.shape_type || 'Circle'}`);
+                    layer.bindPopup(`<b>${fkEsc(fence.name)}</b><br>Type: ${fkEsc(fence.shape_type || 'Circle')}`);
                     this.circles.push(layer);
                 });
 
@@ -634,8 +520,8 @@
                     // Draw preview
                     this.previewCircle = L.circle([this.formData.center_lat, this.formData.center_lng], {
                         radius: this.formData.radius_meters,
-                        color: '#22c55e',
-                        fillColor: '#22c55e',
+                        color: '#6FA052',
+                        fillColor: '#6FA052',
                         fillOpacity: 0.3,
                         dashArray: '5, 5'
                     }).addTo(this.map);
@@ -688,6 +574,19 @@
                 } catch (error) {
                     this.showError('Error saving geofence: ' + error.message);
                 }
+            },
+
+            // Header "Create Geofence" button: start a fresh entry, bring the
+            // form into view, focus the first field, and hint the next step.
+            startNewGeofence() {
+                this.cancelEdit(); // reset form & exit any in-progress edit
+                setTimeout(() => {
+                    const form = document.getElementById('geofenceForm');
+                    if (form) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const nameInput = document.getElementById('fenceName');
+                    if (nameInput) nameInput.focus();
+                }, 50);
+                this.showSuccess('Enter the details or click the map to set a location, then press Create.');
             },
 
             editFence(fence) {

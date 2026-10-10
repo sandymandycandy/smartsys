@@ -1,240 +1,220 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}{{ farm.farm_name }} - Smart Pastoralism{% endblock %}
+{% block title %}{{ farm.farm_name }} · PawTrack{% endblock %}
 
 {% block page_content %}
-<div x-data="farmDashboard" x-init="init()">
-    <!-- Header -->
-    <div class="mb-8">
-        <div class="flex items-center justify-between mb-4">
-            <div>
-                <div class="flex items-center gap-3">
-                    <a href="/farms" class="text-gray-600 hover:text-gray-900">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7">
-                            </path>
-                        </svg>
-                    </a>
-                    <h1 class="text-3xl font-bold text-gray-900">🌾 {{ farm.farm_name }}</h1>
-                </div>
-                <p class="mt-2 text-sm text-gray-600">Farm Code: {{ farm.farm_code }}</p>
-            </div>
-            <button @click="showEditModal = true"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                Edit Farm
-            </button>
-        </div>
+{% set h = health %}
+{% set status_tag = {'critical': ('fk-tag-emerg', 'Needs help'), 'watch': ('fk-tag-prog', 'Watch'), 'recovering': ('fk-tag-recov', 'Being checked'), 'healthy': ('fk-tag-done', 'Healthy')} %}
+{% set dot = {'critical': 'fk-dot-emerg', 'watch': 'fk-dot-prog', 'recovering': 'fk-dot-recov', 'healthy': 'fk-dot-done'} %}
+<div x-data="farmPage()">
+    <nav class="text-sm fk-muted-2 mb-5" aria-label="Breadcrumb">
+        <a href="/farms" class="hover:underline">Farms</a><span class="mx-1.5">/</span><span class="fk-mono text-xs">{{ farm.farm_code }}</span>
+    </nav>
 
-        <!-- Farm Info Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-white rounded-lg shadow p-4">
-                <p class="text-sm text-gray-600">Location</p>
-                <p class="font-semibold">{{ farm.location or 'Not set' }}</p>
-            </div>
-            <div class="bg-white rounded-lg shadow p-4">
-                <p class="text-sm text-gray-600">Area</p>
-                <p class="font-semibold">{{ farm.area_hectares or 'N/A' }} hectares</p>
-            </div>
-            <div class="bg-white rounded-lg shadow p-4">
-                <p class="text-sm text-gray-600">Owner</p>
-                <p class="font-semibold">{{ farm.owner_name or 'Not set' }}</p>
-            </div>
+    <header class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-7">
+        <div>
+            <p class="fk-eyebrow">{{ farm.location or 'No location set' }}{% if farm.area_hectares %} · {{ farm.area_hectares|round(1) }} ha{% endif %}</p>
+            <h1 class="fk-h1 mt-2">{{ farm.farm_name }}</h1>
+            <p class="fk-muted mt-2">
+                {% if h.critical %}{{ h.critical }} animal{{ 's' if h.critical != 1 }} need{{ 's' if h.critical == 1 }} help now{% if h.watch %}, {{ h.watch }} on watch{% endif %}.
+                {% elif h.watch %}{{ h.watch }} animal{{ 's' if h.watch != 1 }} on watch. Nothing urgent.
+                {% elif h.herd %}All {{ h.herd }} animals are healthy.
+                {% else %}No animals on this farm yet.{% endif %}
+            </p>
         </div>
+        <div class="flex flex-wrap gap-3">
+            <button class="fk-btn fk-btn-ghost" @click="showEdit = true; error = ''">Edit details</button>
+            <button class="fk-btn fk-btn-primary" @click="showAssign = true; error = ''">{{ icon('plus', 'w-[18px] h-[18px]') }}Add an animal</button>
+        </div>
+    </header>
+
+    <section class="fk-card fk-kpis mb-7" aria-label="Farm at a glance">
+        <div>
+            <p class="fk-eyebrow">Herd</p>
+            <p class="fk-kpi mt-3">{{ h.herd }}</p>
+            <p class="text-sm fk-muted-2 mt-2">{{ animals|selectattr('kind', 'equalto', 'Cow')|list|length }} cows, {{ animals|selectattr('kind', 'equalto', 'Sheep')|list|length }} sheep</p>
+        </div>
+        <div>
+            <p class="fk-eyebrow">Need attention</p>
+            <p class="fk-kpi mt-3" {% if h.critical %}style="color:var(--emerg)"{% endif %}>{{ h.critical + h.watch }}</p>
+            <p class="text-sm fk-muted-2 mt-2">{{ h.critical }} critical, {{ h.watch }} watch</p>
+        </div>
+        <div>
+            <p class="fk-eyebrow">Avg body temp</p>
+            <p class="fk-kpi mt-3">{{ h.avg_temp if h.avg_temp is not none else '--' }}<span class="text-xl align-top ml-0.5">°C</span></p>
+            <p class="text-sm fk-muted-2 mt-2">normal 38.0 to 39.3</p>
+        </div>
+        <div>
+            <p class="fk-eyebrow">Healthy</p>
+            <p class="fk-kpi mt-3">{{ h.healthy_pct ~ '%' if h.healthy_pct is not none else '--' }}</p>
+            <p class="text-sm fk-muted-2 mt-2">{{ h.low_battery }} collar{{ 's' if h.low_battery != 1 }} below 50%</p>
+        </div>
+    </section>
+
+    <div class="grid gap-7 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <section class="fk-card min-w-0" aria-labelledby="herd-h">
+            <div class="px-5 pt-5 pb-3"><h2 id="herd-h" class="fk-h2">Animals on this farm</h2></div>
+            {% if animals %}
+            <div class="overflow-x-auto border-t" style="border-color:var(--line)">
+                <table class="fk-table">
+                    <thead><tr><th>Animal</th><th>Condition</th><th class="text-right hidden sm:table-cell">Temp</th><th class="text-right hidden sm:table-cell">Heart</th><th class="hidden sm:table-cell">Status</th><th class="hidden md:table-cell text-right whitespace-nowrap">Last seen</th></tr></thead>
+                    <tbody>
+                        {% for a in animals %}
+                        <tr class="cursor-pointer" data-href="/dashboard/animals/{{ a.device_id|urlencode }}" onclick="window.location=this.dataset.href">
+                            <td class="whitespace-nowrap">
+                                <a href="/dashboard/animals/{{ a.device_id }}" class="font-semibold">{{ a.name or a.device_id }}</a>
+                                <span class="block fk-mono text-[11px] fk-muted-2">{{ a.device_id }} · {{ a.breed or a.kind }}</span>
+                                <span class="fk-tag mt-1.5 sm:hidden {{ status_tag[a.status][0] }}">{{ status_tag[a.status][1] }}</span>
+                            </td>
+                            <td><span class="flex items-center gap-2 sm:min-w-[170px]"><span class="fk-dot {{ dot[a.status] }}"></span>{{ a.condition }}</span></td>
+                            <td class="text-right fk-mono text-[13px] hidden sm:table-cell">{{ "%.1f°"|format(a.temp) if a.temp else '--' }}</td>
+                            <td class="text-right fk-mono text-[13px] hidden sm:table-cell whitespace-nowrap">{{ a.hr ~ ' bpm' if a.hr else '--' }}</td>
+                            <td class="hidden sm:table-cell"><span class="fk-tag {{ status_tag[a.status][0] }}">{{ status_tag[a.status][1] }}</span></td>
+                            <td class="hidden md:table-cell text-right fk-mono text-xs fk-muted-2">{{ a.last_seen }} ago</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="px-5 pb-10 pt-4 text-center border-t" style="border-color:var(--line-soft)">
+                <p class="font-semibold">No animals here yet.</p>
+                <p class="text-sm fk-muted-2 mt-1">Add a collared animal to start tracking it under this farm.</p>
+                <button class="fk-btn fk-btn-primary mt-4" @click="showAssign = true">{{ icon('plus', 'w-[18px] h-[18px]') }}Add an animal</button>
+            </div>
+            {% endif %}
+        </section>
+
+        <aside class="space-y-7 min-w-0">
+            {% set located = animals|selectattr('lat')|list %}
+            {% if located or (farm.latitude and farm.longitude) %}
+            <section class="fk-card overflow-hidden" aria-labelledby="map-h">
+                <div class="px-5 pt-5 pb-3"><h2 id="map-h" class="fk-h2">Where they are</h2></div>
+                <div id="farmMap" class="h-64 border-t" style="border-color:var(--line)"></div>
+            </section>
+            {% endif %}
+
+            <section class="fk-card fk-card-pad" aria-labelledby="contact-h">
+                <p class="fk-eyebrow">Contact</p>
+                {% if farm.owner_name %}
+                <div class="flex items-center gap-3 mt-3">
+                    <span class="fk-avatar">{{ (farm.owner_name.split()|map('first')|join('')|upper)[:2] }}</span>
+                    <div class="min-w-0 flex-1">
+                        <h2 id="contact-h" class="text-sm font-semibold">{{ farm.owner_name }}</h2>
+                        <p class="fk-mono text-[11px] fk-muted-2 truncate">{{ farm.contact_phone or '' }}</p>
+                    </div>
+                    {% if farm.contact_phone %}<a href="tel:{{ farm.contact_phone }}" class="fk-btn fk-btn-ghost fk-btn-sm">{{ icon('phone', 'w-4 h-4') }}Call</a>{% endif %}
+                </div>
+                {% if farm.contact_email %}<p class="text-sm mt-3"><a href="mailto:{{ farm.contact_email }}" class="hover:underline" style="color:var(--brand)">{{ farm.contact_email }}</a></p>{% endif %}
+                {% else %}
+                <p id="contact-h" class="fk-muted mt-2">No contact yet. <button class="font-semibold" style="color:var(--brand)" @click="showEdit = true">Add one</button></p>
+                {% endif %}
+            </section>
+        </aside>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-sm font-semibold text-gray-600 mb-2">Total Animals</h3>
-            <p class="text-3xl font-bold text-blue-600">{{ stats.get('total_animals', 0) }}</p>
-        </div>
-
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-sm font-semibold text-gray-600 mb-2">Healthy Animals</h3>
-            <p class="text-3xl font-bold text-green-600">{{ stats.get('healthy_animals', 0) }}</p>
-        </div>
-
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-sm font-semibold text-gray-600 mb-2">Active Alerts</h3>
-            <p class="text-3xl font-bold text-red-600">{{ stats.get('active_alerts', 0) }}</p>
-        </div>
-
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-sm font-semibold text-gray-600 mb-2">30-Day Milk Yield</h3>
-            <p class="text-3xl font-bold text-purple-600">{{ (stats.get('total_yield', 0) or 0)|round(1) }}L</p>
-        </div>
+    <!-- Edit farm -->
+    <div class="fk-modal-backdrop" x-show="showEdit" x-cloak @click.self="showEdit = false" @keydown.escape.window="showEdit = false">
+        <form class="fk-modal max-w-2xl" @submit.prevent="saveFarm()">
+            <div class="fk-modal-head">
+                <div><p class="fk-eyebrow">{{ farm.farm_code }}</p><h2 class="fk-h2 mt-1">Edit farm details</h2></div>
+                <button type="button" class="fk-btn fk-btn-quiet fk-btn-sm px-2" @click="showEdit = false" aria-label="Close">{{ icon('close', 'w-5 h-5') }}</button>
+            </div>
+            <div class="fk-modal-body grid md:grid-cols-2 gap-4">
+                <div class="md:col-span-2"><label class="fk-label" for="e-name">Farm name</label><input id="e-name" class="fk-input" x-model="form.farm_name" required></div>
+                <div class="md:col-span-2"><label class="fk-label" for="e-loc">Location</label><input id="e-loc" class="fk-input" x-model="form.location"></div>
+                <div><label class="fk-label" for="e-lat">Latitude</label><input id="e-lat" class="fk-input" type="number" step="0.000001" x-model="form.latitude"></div>
+                <div><label class="fk-label" for="e-lng">Longitude</label><input id="e-lng" class="fk-input" type="number" step="0.000001" x-model="form.longitude"></div>
+                <div><label class="fk-label" for="e-area">Area (hectares)</label><input id="e-area" class="fk-input" type="number" step="0.1" x-model="form.area_hectares"></div>
+                <div><label class="fk-label" for="e-owner">Owner</label><input id="e-owner" class="fk-input" x-model="form.owner_name"></div>
+                <div><label class="fk-label" for="e-phone">Phone</label><input id="e-phone" class="fk-input" type="tel" x-model="form.contact_phone"></div>
+                <div><label class="fk-label" for="e-email">Email</label><input id="e-email" class="fk-input" type="email" x-model="form.contact_email"></div>
+                <p class="md:col-span-2 fk-notice fk-notice-err" x-show="error" x-text="error"></p>
+            </div>
+            <div class="fk-modal-foot">
+                <button type="button" class="fk-btn fk-btn-ghost" @click="showEdit = false">Cancel</button>
+                <button type="submit" class="fk-btn fk-btn-primary" :disabled="busy" x-text="busy ? 'Saving' : 'Save changes'"></button>
+            </div>
+        </form>
     </div>
 
-    <!-- Animals Table -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-bold">🐮 Animals in this Farm</h2>
-            <button @click="showAssignModal = true"
-                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                Assign Animal
-            </button>
-        </div>
-
-        {% if animals %}
-        <div class="overflow-x-auto">
-            <table class="w-full">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Device ID</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Temperature</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Heart Rate</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Battery</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Alerts</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Last Update</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y">
-                    {% for animal in animals %}
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3">
-                            <a href="/dashboard/animals/{{ animal.device_id }}"
-                                class="text-blue-600 hover:text-blue-800 font-medium">
-                                {{ animal.device_id }}
-                            </a>
-                        </td>
-                        <td class="px-4 py-3">
-                            {% if animal.temperature %}
-                            <span
-                                class="{% if animal.temperature > 39.5 %}text-red-600{% else %}text-gray-900{% endif %}">
-                                {{ animal.temperature|round(1) }}°C
-                            </span>
-                            {% else %}
-                            <span class="text-gray-400">N/A</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3">
-                            {% if animal.heart_rate %}
-                            <span class="{% if animal.heart_rate > 80 %}text-red-600{% else %}text-gray-900{% endif %}">
-                                {{ animal.heart_rate }} BPM
-                            </span>
-                            {% else %}
-                            <span class="text-gray-400">N/A</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3">
-                            {% if animal.battery %}
-                            <span
-                                class="{% if animal.battery < 20 %}text-red-600{% elif animal.battery < 50 %}text-yellow-600{% else %}text-green-600{% endif %}">
-                                {{ animal.battery }}%
-                            </span>
-                            {% else %}
-                            <span class="text-gray-400">N/A</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3">
-                            {% if animal.alert_count > 0 %}
-                            <span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold">
-                                {{ animal.alert_count }}
-                            </span>
-                            {% else %}
-                            <span class="text-gray-400">None</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-600">
-                            {{ animal.last_update or 'Never' }}
-                        </td>
-                        <td class="px-4 py-3">
-                            <a href="/dashboard/animals/{{ animal.device_id }}"
-                                class="text-blue-600 hover:text-blue-800 text-sm">
-                                View Details →
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="text-center py-12 bg-gray-50 rounded-lg">
-            <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-            </svg>
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">No Animals in This Farm</h3>
-            <p class="text-gray-600 mb-4">Assign animals to get started</p>
-            <button @click="showAssignModal = true"
-                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                Assign Animal
-            </button>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Assign Animal Modal -->
-    <div x-show="showAssignModal" x-cloak
-        class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-        @click="showAssignModal = false">
-        <div class="bg-white rounded-lg max-w-md w-full p-6" @click.stop>
-            <h2 class="text-2xl font-bold mb-4">Assign Animal to Farm</h2>
-            <form @submit.prevent="assignAnimal">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        Animal Device ID
-                    </label>
-                    <input type="text" x-model="assignDeviceId" required
-                        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., COW-001">
-                </div>
-                <div class="flex justify-end gap-3">
-                    <button type="button" @click="showAssignModal = false"
-                        class="px-4 py-2 border rounded-lg hover:bg-gray-50">
-                        Cancel
-                    </button>
-                    <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                        Assign
-                    </button>
-                </div>
-            </form>
-        </div>
+    <!-- Add animal -->
+    <div class="fk-modal-backdrop" x-show="showAssign" x-cloak @click.self="showAssign = false" @keydown.escape.window="showAssign = false">
+        <form class="fk-modal max-w-md" @submit.prevent="assignAnimal()">
+            <div class="fk-modal-head">
+                <div><p class="fk-eyebrow">{{ farm.farm_name }}</p><h2 class="fk-h2 mt-1">Add an animal</h2></div>
+                <button type="button" class="fk-btn fk-btn-quiet fk-btn-sm px-2" @click="showAssign = false" aria-label="Close">{{ icon('close', 'w-5 h-5') }}</button>
+            </div>
+            <div class="fk-modal-body">
+                <label class="fk-label" for="a-id">Collar ID</label>
+                <input id="a-id" class="fk-input fk-mono" x-model="deviceId" list="unassigned-ids" required placeholder="COW-011">
+                <datalist id="unassigned-ids">{% for d in unassigned %}<option value="{{ d }}">{% endfor %}</datalist>
+                <p class="fk-hint">{% if unassigned %}Not on a farm yet: {{ unassigned|join(', ') }}{% else %}Every reporting collar already belongs to a farm.{% endif %}</p>
+                <p class="fk-notice fk-notice-err mt-4" x-show="error" x-text="error"></p>
+            </div>
+            <div class="fk-modal-foot">
+                <button type="button" class="fk-btn fk-btn-ghost" @click="showAssign = false">Cancel</button>
+                <button type="submit" class="fk-btn fk-btn-primary" :disabled="busy">Add to farm</button>
+            </div>
+        </form>
     </div>
 </div>
 
 <script>
-    document.addEventListener('alpine:init', () => {
-        Alpine.data('farmDashboard', () => ({
-            showEditModal: false,
-            showAssignModal: false,
-            assignDeviceId: '',
-
-            init() {
-                // Page initialized
-            },
-
-            async assignAnimal() {
+    function farmPage() {
+        return {
+            showEdit: false,
+            showAssign: false,
+            deviceId: '',
+            busy: false,
+            error: '',
+            form: {{ {
+                'farm_name': farm.farm_name, 'location': farm.location, 'latitude': farm.latitude, 'longitude': farm.longitude,
+                'area_hectares': farm.area_hectares, 'owner_name': farm.owner_name, 'contact_phone': farm.contact_phone,
+                'contact_email': farm.contact_email
+            } | tojson }},
+            send: async function (url, method, body) {
+                this.busy = true; this.error = '';
                 try {
-                    const response = await fetch('/farms/api/{{ farm.id }}/assign', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ device_id: this.assignDeviceId })
-                    });
-
-                    const result = await response.json();
-
-                    if (result.success) {
-                        this.showAssignModal = false;
-                        this.assignDeviceId = '';
-                        alert('Animal assigned successfully!');
-                        window.location.reload();
-                    } else {
-                        alert('Error: ' + result.message);
-                    }
-                } catch (error) {
-                    alert('Error: ' + error.message);
-                }
+                    var r = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                    var res = await r.json();
+                    if (r.ok && res.success !== false) { location.reload(); return; }
+                    this.error = res.message || (typeof res.detail === 'string' ? res.detail : 'Please check the fields and try again.');
+                } catch (e) { this.error = 'Something went wrong: ' + e.message; }
+                this.busy = false;
+            },
+            saveFarm: function () {
+                var body = {}, f = this.form;
+                Object.keys(f).forEach(function (k) { body[k] = (f[k] === '' ? null : f[k]); });
+                this.send('/farms/api/{{ farm.id }}', 'PUT', body);
+            },
+            assignAnimal: function () {
+                this.send('/farms/api/{{ farm.id }}/assign', 'POST', { device_id: this.deviceId.trim().toUpperCase() });
             }
-        }));
-    });
-</script>
-
-<style>
-    [x-cloak] {
-        display: none !important;
+        };
     }
-</style>
+
+    (function () {
+        var el = document.getElementById('farmMap');
+        if (!el || el._leaflet_id) return;
+        var animals = {{ animals | selectattr('lat') | list | tojson }};
+        var colors = { critical: '#C2410C', watch: '#B7791F', recovering: '#2B4552', healthy: '#3F7D2A' };
+        var map = L.map('farmMap', { scrollWheelZoom: false });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        var pts = [];
+        {% if farm.latitude and farm.longitude %}
+        pts.push([{{ farm.latitude }}, {{ farm.longitude }}]);
+        L.circleMarker([{{ farm.latitude }}, {{ farm.longitude }}], { radius: 6, color: '#1F2A1F', weight: 2, fillColor: '#FFFDF8', fillOpacity: 1 })
+            .addTo(map).bindPopup('<b>' + fkEsc({{ farm.farm_name|tojson }}) + '</b><br>Farm centre');
+        {% endif %}
+        animals.forEach(function (a) {
+            pts.push([a.lat, a.lng]);
+            L.circleMarker([a.lat, a.lng], { radius: 8, color: '#FFFDF8', weight: 2, fillColor: colors[a.status], fillOpacity: 1 })
+                .addTo(map).bindPopup('<b>' + fkEsc(a.name || a.device_id) + '</b><br>' + fkEsc(a.device_id) + '<br>' + fkEsc(a.condition));
+        });
+        if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30], maxZoom: 15 });
+        else map.setView(pts[0], 14);
+    })();
+</script>
 {% endblock %}

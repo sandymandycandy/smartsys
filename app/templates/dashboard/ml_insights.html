@@ -1,433 +1,258 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}ML Insights - Smart Pastoralism{% endblock %}
+{% block title %}AI insights · PawTrack{% endblock %}
 
 {% block page_content %}
-<div x-data="mlDashboard()" x-init="init()">
-    <div class="mb-8 flex items-center justify-between">
+<div x-data="mlDashboard()">
+    <header class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-7">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900">🤖 AI Health Insights</h1>
-            <p class="mt-2 text-sm text-gray-600">Machine learning-powered disease detection and predictions</p>
+            <p class="fk-eyebrow">Insights</p>
+            <h1 class="fk-h1 mt-2">Ask the model about an animal</h1>
+            <p class="fk-muted mt-2 max-w-2xl">It looks for unusual readings, guesses at likely illness, and forecasts the next 24 hours. Treat it as a second opinion, not a diagnosis.</p>
         </div>
-        <div class="flex items-center gap-3">
-            <button @click="refreshData()"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                🔄 Refresh
-            </button>
-            <a href="/api/ml/retrain" target="_blank"
-                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                🎯 Retrain Models
-            </a>
+        <div class="flex items-center gap-3" x-show="mlAvailable">
+            <span class="text-sm fk-muted-2" x-show="retrainMsg" x-text="retrainMsg"></span>
+            <button @click="retrain()" class="fk-btn fk-btn-ghost" :disabled="retraining" x-text="retraining ? 'Retraining' : 'Retrain models'"></button>
         </div>
-    </div>
+    </header>
 
-    <!-- ML Status Banner -->
-    <div x-show="!mlAvailable" class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded-lg">
-        <div class="flex items-center">
-            <span class="text-2xl mr-3">⚠️</span>
+    <!-- ML unavailable -->
+    <section x-show="checked && !mlAvailable" x-cloak class="fk-notice fk-notice-info mb-7">
+        <p class="font-semibold">The AI models aren't available on this server.</p>
+        <p class="mt-1">Install the libraries, then restart: <code class="fk-kbd">pip install numpy pandas scikit-learn</code></p>
+    </section>
+
+    <div x-show="mlAvailable" x-cloak>
+        <section class="fk-card fk-kpis mb-7" aria-label="Model status">
             <div>
-                <h3 class="text-yellow-800 font-semibold">ML Libraries Not Installed</h3>
-                <p class="text-yellow-700 text-sm mt-1">Run: <code
-                        class="bg-yellow-100 px-2 py-1 rounded">pip install numpy pandas scikit-learn</code></p>
+                <p class="fk-eyebrow">Unusual-reading model</p>
+                <p class="fk-kpi mt-3 !text-[28px]" x-text="status.anomaly_detector_loaded ? 'Ready' : 'Not trained'"></p>
+                <p class="text-sm fk-muted-2 mt-2">isolation forest on vitals</p>
             </div>
-        </div>
-    </div>
+            <div>
+                <p class="fk-eyebrow">Illness model</p>
+                <p class="fk-kpi mt-3 !text-[28px]" x-text="status.disease_classifier_loaded ? 'Ready' : 'Rules only'"></p>
+                <p class="text-sm fk-muted-2 mt-2"><span x-text="(status.supported_diseases || []).length"></span> conditions it knows</p>
+            </div>
+            <div>
+                <p class="fk-eyebrow">Checks this visit</p>
+                <p class="fk-kpi mt-3" x-text="history.length">0</p>
+                <p class="text-sm fk-muted-2 mt-2">kept until you leave the page</p>
+            </div>
+            <div>
+                <p class="fk-eyebrow">Flagged</p>
+                <p class="fk-kpi mt-3" x-text="flaggedCount" :style="flaggedCount ? 'color:var(--emerg)' : ''">0</p>
+                <p class="text-sm fk-muted-2 mt-2">unusual or likely ill</p>
+            </div>
+        </section>
 
-    <div x-show="mlAvailable">
-        <!-- System Status Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
-                <div class="flex items-center justify-between">
+        <!-- Pick an animal -->
+        <section class="fk-card fk-card-pad mb-7" aria-labelledby="pick-h">
+            <h2 id="pick-h" class="fk-h2">Which animal?</h2>
+            <div class="flex flex-col md:flex-row md:items-end gap-3 mt-4">
+                <div class="flex-1 max-w-md">
+                    <label class="fk-label" for="ml-dev">Animal</label>
+                    <select id="ml-dev" x-model="selectedDevice" @change="clearResults()" class="fk-input">
+                        <option value="">Choose an animal</option>
+                        {% for a in animals %}
+                        <option value="{{ a.device_id }}">{{ a.name ~ ' · ' if a.name }}{{ a.device_id }}{% if a.status == 'critical' %} (needs help){% elif a.status == 'watch' %} (on watch){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button class="fk-btn fk-btn-primary" :disabled="!selectedDevice || busy" @click="runAll()">
+                    {{ icon('spark', 'w-[18px] h-[18px]') }}<span x-text="busy ? 'Checking' : 'Run all checks'"></span>
+                </button>
+                <div class="flex flex-wrap gap-2">
+                    <button class="fk-btn fk-btn-quiet" :disabled="!selectedDevice || busy" @click="predictAnomaly()">Unusual readings</button>
+                    <button class="fk-btn fk-btn-quiet" :disabled="!selectedDevice || busy" @click="predictDisease()">Illness</button>
+                    <button class="fk-btn fk-btn-quiet" :disabled="!selectedDevice || busy" @click="forecastHealth()">Forecast</button>
+                </div>
+            </div>
+            <p class="fk-notice fk-notice-err mt-4" x-show="error" x-text="error"></p>
+        </section>
+
+        <div class="grid gap-7 lg:grid-cols-3 mb-7">
+            <!-- Anomaly -->
+            <section class="fk-card fk-card-pad" aria-labelledby="an-h">
+                <p class="fk-eyebrow">Unusual readings</p>
+                <template x-if="!anomalyResult">
+                    <p class="fk-muted mt-3" id="an-h">Run a check to see if this animal's vitals look out of the ordinary.</p>
+                </template>
+                <template x-if="anomalyResult">
                     <div>
-                        <p class="text-blue-100 text-sm font-medium">Model Status</p>
-                        <p class="text-2xl font-bold mt-1" x-text="modelStatus"></p>
-                    </div>
-                    <span class="text-4xl opacity-80">🧠</span>
-                </div>
-            </div>
-
-            <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-green-100 text-sm font-medium">Predictions Made</p>
-                        <p class="text-2xl font-bold mt-1" x-text="totalPredictions"></p>
-                    </div>
-                    <span class="text-4xl opacity-80">📊</span>
-                </div>
-            </div>
-
-            <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-red-100 text-sm font-medium">Anomalies Detected</p>
-                        <p class="text-2xl font-bold mt-1" x-text="anomaliesDetected"></p>
-                    </div>
-                    <span class="text-4xl opacity-80">🚨</span>
-                </div>
-            </div>
-
-            <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-purple-100 text-sm font-medium">At Risk Animals</p>
-                        <p class="text-2xl font-bold mt-1" x-text="atRiskCount"></p>
-                    </div>
-                    <span class="text-4xl opacity-80">⚕️</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Animal Selection & Analysis -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold mb-4">Select Animal for Analysis</h3>
-                <select x-model="selectedDevice" @change="loadPredictions()"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <option value="">-- Select Animal --</option>
-                    <template x-for="device in devices" :key="device">
-                        <option :value="device" x-text="device"></option>
-                    </template>
-                </select>
-
-                <div x-show="selectedDevice" class="mt-4 space-y-2">
-                    <button @click="predictAnomaly()"
-                        class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                        🔍 Detect Anomalies
-                    </button>
-                    <button @click="predictDisease()"
-                        class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
-                        🏥 Predict Disease
-                    </button>
-                    <button @click="forecastHealth()"
-                        class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                        📈 Health Forecast
-                    </button>
-                </div>
-            </div>
-
-            <!-- Anomaly Detection Result -->
-            <div class="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold mb-4 flex items-center">
-                    <span class="text-2xl mr-2">🔍</span>
-                    Anomaly Detection
-                </h3>
-
-                <div x-show="!anomalyResult" class="text-center py-8 text-gray-400">
-                    <span class="text-4xl">🤖</span>
-                    <p class="mt-2">Select an animal and click "Detect Anomalies"</p>
-                </div>
-
-                <div x-show="anomalyResult" class="space-y-4">
-                    <div class="flex items-center justify-between p-4 rounded-lg"
-                        :class="anomalyResult?.is_anomaly ? 'bg-red-50 border-2 border-red-300' : 'bg-green-50 border-2 border-green-300'">
-                        <div>
-                            <p class="font-semibold"
-                                :class="anomalyResult?.is_anomaly ? 'text-red-800' : 'text-green-800'">
-                                <span
-                                    x-text="anomalyResult?.is_anomaly ? '⚠️ ANOMALY DETECTED' : '✅ NORMAL BEHAVIOR'"></span>
-                            </p>
-                            <p class="text-sm mt-1"
-                                :class="anomalyResult?.is_anomaly ? 'text-red-600' : 'text-green-600'"
-                                x-text="anomalyResult?.explanation"></p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-2xl font-bold"
-                                :class="anomalyResult?.is_anomaly ? 'text-red-600' : 'text-green-600'"
-                                x-text="Math.round(anomalyResult?.confidence || 0) + '%'"></p>
-                            <p class="text-xs text-gray-500">Confidence</p>
-                        </div>
-                    </div>
-
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <p class="text-sm text-gray-600"><strong>Model:</strong> <span
-                                x-text="anomalyResult?.model"></span></p>
-                        <p class="text-sm text-gray-600 mt-1"><strong>Score:</strong> <span
-                                x-text="anomalyResult?.anomaly_score?.toFixed(3)"></span></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Disease Prediction & Forecast -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <!-- Disease Prediction -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold mb-4 flex items-center">
-                    <span class="text-2xl mr-2">🏥</span>
-                    Disease Prediction
-                </h3>
-
-                <div x-show="!diseaseResult" class="text-center py-8 text-gray-400">
-                    <span class="text-4xl">💊</span>
-                    <p class="mt-2">Click "Predict Disease" to analyze</p>
-                </div>
-
-                <div x-show="diseaseResult" class="space-y-4">
-                    <div class="text-center p-6 rounded-lg" :class="{
-                            'bg-green-50 border-2 border-green-300': diseaseResult?.disease === 'healthy',
-                            'bg-yellow-50 border-2 border-yellow-300': diseaseResult?.disease === 'heat_stress' || diseaseResult?.disease === 'lameness',
-                            'bg-red-50 border-2 border-red-300': diseaseResult?.disease === 'fever' || diseaseResult?.disease === 'respiratory'
-                        }">
-                        <p class="text-3xl font-bold uppercase" :class="{
-                                'text-green-700': diseaseResult?.disease === 'healthy',
-                                'text-yellow-700': diseaseResult?.disease === 'heat_stress' || diseaseResult?.disease === 'lameness',
-                                'text-red-700': diseaseResult?.disease === 'fever' || diseaseResult?.disease === 'respiratory'
-                            }" x-text="diseaseResult?.disease?.replace('_', ' ')"></p>
-                        <p class="text-sm mt-2 text-gray-600">
-                            Probability: <strong
-                                x-text="Math.round((diseaseResult?.probability || 0) * 100) + '%'"></strong>
+                        <h2 id="an-h" class="fk-h2 mt-2" x-text="anomalyResult.is_anomaly ? 'Something looks off' : 'Looks normal'"></h2>
+                        <span class="fk-tag mt-3" :class="anomalyResult.is_anomaly ? 'fk-tag-emerg' : 'fk-tag-done'" x-text="Math.round(anomalyResult.confidence || 0) + '% sure'"></span>
+                        <p class="text-sm fk-muted mt-3" x-text="anomalyResult.explanation"></p>
+                        <p class="fk-mono text-[11px] fk-muted-2 mt-4 pt-3 border-t" style="border-color:var(--line-soft)">
+                            <span x-text="anomalyResult.model || 'model'"></span> · score <span x-text="anomalyResult.anomaly_score != null ? anomalyResult.anomaly_score.toFixed(3) : '--'"></span>
                         </p>
+                    </div>
+                </template>
+            </section>
 
-                        <!-- Confidence meter -->
-                        <div class="w-full bg-gray-200 rounded-full h-3 mt-4">
-                            <div class="h-3 rounded-full transition-all duration-500" :class="{
-                                    'bg-green-500': diseaseResult?.confidence < 70,
-                                    'bg-yellow-500': diseaseResult?.confidence >= 70 && diseaseResult?.confidence < 85,
-                                    'bg-red-500': diseaseResult?.confidence >= 85
-                                }" :style="'width: ' + (diseaseResult?.confidence || 0) + '%'"></div>
+            <!-- Disease -->
+            <section class="fk-card fk-card-pad" aria-labelledby="dis-h">
+                <p class="fk-eyebrow">Likely illness</p>
+                <template x-if="!diseaseResult">
+                    <p class="fk-muted mt-3" id="dis-h">The model compares recent readings with the patterns of <span x-text="(status.supported_diseases || []).length"></span> common conditions.</p>
+                </template>
+                <template x-if="diseaseResult">
+                    <div>
+                        <h2 id="dis-h" class="fk-h2 mt-2 capitalize" x-text="diseaseResult.disease === 'healthy' ? 'No illness spotted' : (diseaseResult.disease || '').replace(/_/g, ' ')"></h2>
+                        <div class="flex items-center gap-3 mt-3">
+                            <span class="fk-track flex-1"><span class="fk-fill block" :style="'width:' + Math.round((diseaseResult.probability || 0) * 100) + '%;' + (diseaseResult.disease === 'healthy' ? '' : (diseaseResult.probability > 0.7 ? 'background:var(--emerg)' : 'background:var(--prog)'))"></span></span>
+                            <span class="fk-mono text-xs" x-text="Math.round((diseaseResult.probability || 0) * 100) + '%'"></span>
                         </div>
+                        <template x-if="diseaseResult.recommendations && diseaseResult.recommendations.length">
+                            <div class="mt-4 pt-3 border-t" style="border-color:var(--line-soft)">
+                                <p class="text-sm font-semibold">What to do</p>
+                                <ul class="mt-2 space-y-1.5 text-sm fk-muted list-disc pl-5">
+                                    <template x-for="rec in diseaseResult.recommendations" :key="rec"><li x-text="rec"></li></template>
+                                </ul>
+                            </div>
+                        </template>
                     </div>
+                </template>
+            </section>
 
-                    <!-- Recommendations -->
-                    <div class="bg-blue-50 p-4 rounded-lg">
-                        <p class="font-semibold text-blue-900 mb-2">📋 Recommendations:</p>
-                        <ul class="space-y-1">
-                            <template x-for="rec in diseaseResult?.recommendations" :key="rec">
-                                <li class="text-sm text-blue-800 flex items-start">
-                                    <span class="mr-2">•</span>
-                                    <span x-text="rec"></span>
-                                </li>
-                            </template>
-                        </ul>
+            <!-- Forecast -->
+            <section class="fk-card fk-card-pad" aria-labelledby="fc-h">
+                <p class="fk-eyebrow">Next 24 hours</p>
+                <template x-if="!forecastResult || forecastResult.error">
+                    <p class="fk-muted mt-3" id="fc-h" x-text="forecastResult && forecastResult.error ? forecastResult.error : 'A short forecast of temperature and heart rate from recent trends.'"></p>
+                </template>
+                <template x-if="forecastResult && !forecastResult.error">
+                    <div>
+                        <h2 id="fc-h" class="fk-h2 mt-2" x-text="{ low: 'Low risk', medium: 'Some risk', high: 'High risk' }[forecastResult.risk_level] || forecastResult.risk_level"></h2>
+                        <span class="fk-tag mt-3" :class="{ low: 'fk-tag-done', medium: 'fk-tag-prog', high: 'fk-tag-emerg' }[forecastResult.risk_level] || 'fk-tag-plain'" x-text="forecastResult.confidence + '% confidence'"></span>
+                        <dl class="grid grid-cols-2 gap-3 mt-4 pt-3 border-t" style="border-color:var(--line-soft)">
+                            <div>
+                                <dt class="fk-eyebrow">Body temp</dt>
+                                <dd class="fk-mono text-sm mt-1"><span x-text="forecastResult.current_temperature != null ? forecastResult.current_temperature.toFixed(1) : '--'"></span> to <b x-text="forecastResult.predicted_temperature != null ? forecastResult.predicted_temperature.toFixed(1) : '--'"></b>°</dd>
+                                <dd class="text-xs fk-muted-2 mt-0.5" x-text="forecastResult.temperature_trend"></dd>
+                            </div>
+                            <div>
+                                <dt class="fk-eyebrow">Heart rate</dt>
+                                <dd class="fk-mono text-sm mt-1"><span x-text="forecastResult.current_heart_rate"></span> to <b x-text="forecastResult.predicted_heart_rate"></b></dd>
+                                <dd class="text-xs fk-muted-2 mt-0.5" x-text="forecastResult.heart_rate_trend"></dd>
+                            </div>
+                        </dl>
                     </div>
-                </div>
-            </div>
-
-            <!-- Health Forecast -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold mb-4 flex items-center">
-                    <span class="text-2xl mr-2">📈</span>
-                    24-Hour Health Forecast
-                </h3>
-
-                <div x-show="!forecastResult || forecastResult.error" class="text-center py-8 text-gray-400">
-                    <span class="text-4xl">🔮</span>
-                    <p class="mt-2" x-text="forecastResult?.error || 'Click \" Health Forecast\" to predict'"></p>
-                </div>
-
-                <div x-show="forecastResult && !forecastResult.error" class="space-y-4">
-                    <!-- Risk Level Badge -->
-                    <div class="text-center p-4 rounded-lg" :class="{
-                            'bg-green-50': forecastResult?.risk_level === 'low',
-                            'bg-yellow-50': forecastResult?.risk_level === 'medium',
-                            'bg-red-50': forecastResult?.risk_level === 'high'
-                        }">
-                        <p class="text-sm text-gray-600">Risk Level</p>
-                        <p class="text-2xl font-bold uppercase" :class="{
-                                'text-green-700': forecastResult?.risk_level === 'low',
-                                'text-yellow-700': forecastResult?.risk_level === 'medium',
-                                'text-red-700': forecastResult?.risk_level === 'high'
-                            }" x-text="forecastResult?.risk_level"></p>
-                    </div>
-
-                    <!-- Predictions -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <p class="text-xs text-gray-500">Current → Predicted</p>
-                            <p class="text-sm font-semibold text-gray-900 mt-1">
-                                <span x-text="forecastResult?.current_temperature?.toFixed(1)"></span>°C →
-                                <span class="text-blue-600"
-                                    x-text="forecastResult?.predicted_temperature?.toFixed(1)"></span>°C
-                            </p>
-                            <p class="text-xs text-gray-500 mt-1">
-                                <span x-text="forecastResult?.temperature_trend === 'increasing' ? '📈' : '📉'"></span>
-                                <span x-text="forecastResult?.temperature_trend"></span>
-                            </p>
-                        </div>
-
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <p class="text-xs text-gray-500">Current → Predicted</p>
-                            <p class="text-sm font-semibold text-gray-900 mt-1">
-                                <span x-text="forecastResult?.current_heart_rate"></span> →
-                                <span class="text-purple-600" x-text="forecastResult?.predicted_heart_rate"></span> BPM
-                            </p>
-                            <p class="text-xs text-gray-500 mt-1">
-                                <span x-text="forecastResult?.heart_rate_trend === 'increasing' ? '📈' : '📉'"></span>
-                                <span x-text="forecastResult?.heart_rate_trend"></span>
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="bg-gray-50 p-3 rounded-lg text-center">
-                        <p class="text-xs text-gray-500">Forecast Confidence</p>
-                        <p class="text-lg font-bold text-gray-900" x-text="forecastResult?.confidence + '%'"></p>
-                    </div>
-                </div>
-            </div>
+                </template>
+            </section>
         </div>
 
-        <!-- Recent Predictions History -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-lg font-semibold mb-4">📜 Recent ML Predictions</h3>
-
-            <div x-show="recentPredictions.length === 0" class="text-center py-8 text-gray-400">
-                <span class="text-4xl">📊</span>
-                <p class="mt-2">No predictions yet. Analyze an animal to see history.</p>
-            </div>
-
-            <div x-show="recentPredictions.length > 0" class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Anomaly</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disease</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <template x-for="pred in recentPredictions.slice(0, 10)" :key="pred.timestamp">
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-4 py-3 text-sm text-gray-600"
-                                    x-text="new Date(pred.timestamp).toLocaleTimeString()"></td>
-                                <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="pred.device"></td>
-                                <td class="px-4 py-3">
-                                    <span class="px-2 py-1 text-xs rounded-full"
-                                        :class="pred.is_anomaly ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'"
-                                        x-text="pred.is_anomaly ? 'Yes' : 'No'"></span>
-                                </td>
-                                <td class="px-4 py-3 text-sm text-gray-900" x-text="pred.disease"></td>
-                                <td class="px-4 py-3 text-sm text-gray-600" x-text="pred.confidence + '%'"></td>
+        <!-- History -->
+        <section class="fk-card" aria-labelledby="hist-h">
+            <div class="px-5 pt-5 pb-3"><h2 id="hist-h" class="fk-h2">Checks you've run</h2></div>
+            <p class="px-5 pb-6 fk-muted" x-show="history.length === 0">Nothing yet. Pick an animal above and run a check.</p>
+            <div class="overflow-x-auto border-t" style="border-color:var(--line)" x-show="history.length > 0">
+                <table class="fk-table">
+                    <thead><tr><th>Time</th><th>Animal</th><th>Check</th><th>Result</th><th class="text-right">Confidence</th></tr></thead>
+                    <tbody>
+                        <template x-for="h in history.slice(0, 20)" :key="h.timestamp + h.type">
+                            <tr>
+                                <td class="fk-mono text-xs fk-muted-2" x-text="new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })"></td>
+                                <td><a :href="'/dashboard/animals/' + h.device" class="font-semibold" x-text="h.device"></a></td>
+                                <td x-text="{ anomaly: 'Unusual readings', disease: 'Illness', forecast: 'Forecast' }[h.type]"></td>
+                                <td><span class="fk-tag" :class="h.flagged ? 'fk-tag-emerg' : 'fk-tag-done'" x-text="h.result"></span></td>
+                                <td class="text-right fk-mono text-[13px]" x-text="h.confidence + '%'"></td>
                             </tr>
                         </template>
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
     </div>
 </div>
 
 <script>
     function mlDashboard() {
         return {
+            checked: false,
             mlAvailable: false,
-            modelStatus: 'Loading...',
-            totalPredictions: 0,
-            anomaliesDetected: 0,
-            atRiskCount: 0,
-            devices: [],
+            status: {},
             selectedDevice: '',
+            busy: false,
+            error: '',
             anomalyResult: null,
             diseaseResult: null,
             forecastResult: null,
-            recentPredictions: [],
+            history: [],
+            retraining: false,
+            retrainMsg: '',
+
+            get flaggedCount() { return this.history.filter(function (h) { return h.flagged; }).length; },
 
             async init() {
-                await this.checkMLStatus();
-                await this.loadDevices();
-            },
-
-            async checkMLStatus() {
                 try {
-                    const response = await fetch('/api/ml/status');
-                    const data = await response.json();
-
-                    this.mlAvailable = data.ml_available;
-                    this.modelStatus = data.anomaly_detector_loaded ? 'Active' : 'Not Trained';
-
-                    console.log('ML Status:', data);
-                } catch (error) {
-                    console.error('Error checking ML status:', error);
+                    var r = await fetch('/api/ml/status');
+                    this.status = await r.json();
+                    this.mlAvailable = !!this.status.ml_available;
+                } catch (e) {
                     this.mlAvailable = false;
                 }
+                this.checked = true;
             },
 
-            async loadDevices() {
-                try {
-                    const response = await fetch('/api/animals/summary');
-                    const data = await response.json();
+            clearResults() {
+                this.anomalyResult = null; this.diseaseResult = null; this.forecastResult = null; this.error = '';
+            },
 
-                    this.devices = data.animals.map(a => a.device_id);
-                    this.totalPredictions = data.animals.length * 3; // Estimate
-                } catch (error) {
-                    console.error('Error loading devices:', error);
-                }
+            record(type, result, flagged, confidence) {
+                this.history.unshift({ timestamp: new Date().toISOString(), device: this.selectedDevice, type: type, result: result, flagged: flagged, confidence: confidence });
+            },
+
+            async call(url, method) {
+                var r = await fetch(url, { method: method || 'GET' });
+                var data = await r.json();
+                if (!r.ok) throw new Error(data.detail || 'request failed');
+                return data;
             },
 
             async predictAnomaly() {
                 if (!this.selectedDevice) return;
-
                 try {
-                    const response = await fetch(`/api/ml/predict/anomaly/${this.selectedDevice}`, {
-                        method: 'POST'
-                    });
-                    const data = await response.json();
-
-                    this.anomalyResult = data.prediction;
-
-                    if (data.prediction.is_anomaly) {
-                        this.anomaliesDetected++;
-                    }
-
-                    this.addToPredictionHistory('anomaly', data.prediction);
-                } catch (error) {
-                    console.error('Error predicting anomaly:', error);
-                }
+                    var p = (await this.call('/api/ml/predict/anomaly/' + this.selectedDevice, 'POST')).prediction;
+                    this.anomalyResult = p;
+                    this.record('anomaly', p.is_anomaly ? 'Unusual' : 'Normal', !!p.is_anomaly, Math.round(p.confidence || 0));
+                } catch (e) { this.error = 'Unusual-readings check failed: ' + e.message; }
             },
 
             async predictDisease() {
                 if (!this.selectedDevice) return;
-
                 try {
-                    const response = await fetch(`/api/ml/predict/disease/${this.selectedDevice}`, {
-                        method: 'POST'
-                    });
-                    const data = await response.json();
-
-                    this.diseaseResult = data.prediction;
-
-                    if (data.prediction.disease !== 'healthy' && data.prediction.probability > 0.7) {
-                        this.atRiskCount++;
-                    }
-
-                    this.addToPredictionHistory('disease', data.prediction);
-                } catch (error) {
-                    console.error('Error predicting disease:', error);
-                }
+                    var p = (await this.call('/api/ml/predict/disease/' + this.selectedDevice, 'POST')).prediction;
+                    this.diseaseResult = p;
+                    var ill = p.disease && p.disease !== 'healthy';
+                    this.record('disease', ill ? p.disease.replace(/_/g, ' ') : 'Healthy', ill && p.probability > 0.7, Math.round((p.probability || 0) * 100));
+                } catch (e) { this.error = 'Illness check failed: ' + e.message; }
             },
 
             async forecastHealth() {
                 if (!this.selectedDevice) return;
-
                 try {
-                    const response = await fetch(`/api/ml/forecast/${this.selectedDevice}?hours_ahead=24`);
-                    const data = await response.json();
-
-                    this.forecastResult = data;
-                } catch (error) {
-                    console.error('Error forecasting health:', error);
-                }
+                    var f = await this.call('/api/ml/forecast/' + this.selectedDevice + '?hours_ahead=24');
+                    this.forecastResult = f;
+                    if (!f.error) this.record('forecast', (f.risk_level || '') + ' risk', f.risk_level === 'high', f.confidence || 0);
+                } catch (e) { this.error = 'Forecast failed: ' + e.message; }
             },
 
-            addToPredictionHistory(type, result) {
-                this.recentPredictions.unshift({
-                    timestamp: new Date().toISOString(),
-                    device: this.selectedDevice,
-                    type: type,
-                    is_anomaly: result.is_anomaly || false,
-                    disease: result.disease || 'N/A',
-                    confidence: Math.round(result.confidence || result.probability * 100 || 0)
-                });
-
-                // Keep only last 50
-                if (this.recentPredictions.length > 50) {
-                    this.recentPredictions = this.recentPredictions.slice(0, 50);
-                }
+            async runAll() {
+                this.busy = true; this.clearResults();
+                await Promise.all([this.predictAnomaly(), this.predictDisease(), this.forecastHealth()]);
+                this.busy = false;
             },
 
-            refreshData() {
-                this.init();
+            async retrain() {
+                this.retraining = true; this.retrainMsg = '';
+                try {
+                    var d = await this.call('/api/ml/retrain', 'POST');
+                    this.retrainMsg = 'Models retrained.';
+                    if (d.model_info) this.status = d.model_info;
+                } catch (e) { this.retrainMsg = 'Retraining failed: ' + e.message; }
+                this.retraining = false;
             }
         };
     }

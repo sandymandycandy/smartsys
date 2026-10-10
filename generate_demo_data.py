@@ -7,6 +7,10 @@ import random
 from datetime import datetime, timedelta
 from app.config import settings
 
+# Base location for all mock data — Chennai, India
+CHENNAI_LAT = 13.0827
+CHENNAI_LON = 80.2707
+
 class DemoDataGenerator:
     """Generate realistic demo data for all system features"""
     
@@ -26,6 +30,25 @@ class DemoDataGenerator:
             "Holstein", "Jersey", "Guernsey", "Brown Swiss", "Ayrshire",
             "Merino", "Dorset", "Suffolk", "Romney", "Texel"
         ]
+        # Varied health conditions spread across the herd for a rich demo
+        # Options: healthy, fever, heat_stress, lethargic, low_battery, recovering
+        self.conditions = {
+            "COW-001": "healthy",
+            "COW-002": "fever",
+            "COW-003": "healthy",
+            "COW-004": "heat_stress",
+            "COW-005": "healthy",
+            "COW-006": "lethargic",
+            "COW-007": "healthy",
+            "COW-008": "recovering",
+            "COW-009": "healthy",
+            "COW-010": "low_battery",
+            "SHEEP-001": "healthy",
+            "SHEEP-002": "heat_stress",
+            "SHEEP-003": "healthy",
+            "SHEEP-004": "fever",
+            "SHEEP-005": "healthy",
+        }
     
     def generate_all(self):
         """Generate all demo data"""
@@ -73,63 +96,63 @@ class DemoDataGenerator:
         farms = [
             {
                 'code': 'NORTH-DAIRY',
-                'name': 'North Dairy Farm',
-                'location': 'North Pasture, County',
-                'lat': 40.7128,
-                'lon': -74.0060,
+                'name': 'Madhavaram Dairy Farm',
+                'location': 'Madhavaram, Chennai',
+                'lat': 13.1480,
+                'lon': 80.2320,
                 'area': 75.5,
-                'owner': 'John Smith',
-                'phone': '+1-555-0101',
-                'email': 'john@northdairy.com'
+                'owner': 'Rajesh Kumar',
+                'phone': '+91-98400-10101',
+                'email': 'rajesh@madhavaramdairy.in'
             },
             {
                 'code': 'SOUTH-BREED',
-                'name': 'South Breeding Site',
-                'location': 'South Valley, County',
-                'lat': 40.7228,
-                'lon': -74.0160,
+                'name': 'Tambaram Breeding Site',
+                'location': 'Tambaram, Chennai',
+                'lat': 12.9250,
+                'lon': 80.1270,
                 'area': 120.0,
-                'owner': 'Sarah Johnson',
-                'phone': '+1-555-0102',
-                'email': 'sarah@southbreed.com'
+                'owner': 'Priya Venkatesan',
+                'phone': '+91-98400-10102',
+                'email': 'priya@tambarambreed.in'
             },
             {
                 'code': 'EAST-YOUNG',
-                'name': 'East Young Stock',
-                'location': 'East Hills, County',
-                'lat': 40.7328,
-                'lon': -73.9960,
+                'name': 'Sholinganallur Young Stock',
+                'location': 'Sholinganallur, Chennai',
+                'lat': 12.9010,
+                'lon': 80.2270,
                 'area': 45.0,
-                'owner': 'Mike Williams',
-                'phone': '+1-555-0103',
-                'email': 'mike@eastyoung.com'
+                'owner': 'Arun Mohan',
+                'phone': '+91-98400-10103',
+                'email': 'arun@sholingayoung.in'
             },
             {
                 'code': 'WEST-SHEEP',
-                'name': 'West Sheep Farm',
-                'location': 'West Range, County',
-                'lat': 40.7028,
-                'lon': -74.0260,
+                'name': 'Poonamallee Sheep Farm',
+                'location': 'Poonamallee, Chennai',
+                'lat': 13.0480,
+                'lon': 80.0950,
                 'area': 90.0,
-                'owner': 'Emily Brown',
-                'phone': '+1-555-0104',
-                'email': 'emily@westsheep.com'
+                'owner': 'Lakshmi Narayanan',
+                'phone': '+91-98400-10104',
+                'email': 'lakshmi@poonamalleesheep.in'
             }
         ]
-        
+
         # Update Main Farm if it exists, otherwise create farms
         cursor.execute("SELECT COUNT(*) FROM farms WHERE farm_code = 'MAIN'")
         if cursor.fetchone()[0] > 0:
             # Update Main Farm
             cursor.execute('''
-                UPDATE farms 
-                SET location = 'Primary Location, County',
-                    latitude = 40.7128,
-                    longitude = -74.0060,
+                UPDATE farms
+                SET location = 'Guindy, Chennai',
+                    latitude = 13.0067,
+                    longitude = 80.2206,
                     area_hectares = 100.0,
                     owner_name = 'Farm Manager',
-                    contact_phone = '+1-555-0100',
-                    contact_email = 'manager@mainfarm.com'
+                    contact_phone = '+91-98400-10100',
+                    contact_email = 'manager@smartstockpulse.in'
                 WHERE farm_code = 'MAIN'
             ''')
         
@@ -143,64 +166,117 @@ class DemoDataGenerator:
             ''', (farm['code'], farm['name'], farm['location'], farm['lat'], farm['lon'],
                   farm['area'], farm['owner'], farm['phone'], farm['email']))
     
+    def _vitals_for(self, condition, base_temp, base_hr, active_issue):
+        """Return (temperature, heart_rate, motion, humidity) for a condition.
+
+        active_issue signals whether the animal is currently in its abnormal
+        window (so history shows a healthy baseline that trends into the issue).
+        """
+        humidity = random.gauss(60, 8)
+
+        if not active_issue or condition in ("healthy", "recovering"):
+            temperature = random.gauss(base_temp, 0.3)
+            heart_rate = int(random.gauss(base_hr, 5))
+            motion = random.gauss(0.85, 0.2)
+        elif condition == "fever":
+            temperature = random.gauss(40.6, 0.4)      # High fever
+            heart_rate = int(random.gauss(92, 6))       # Elevated HR
+            motion = random.gauss(0.3, 0.1)             # Very low activity
+        elif condition == "heat_stress":
+            temperature = random.gauss(39.8, 0.3)       # Mildly elevated
+            heart_rate = int(random.gauss(88, 6))       # Elevated HR
+            motion = random.gauss(0.5, 0.15)            # Reduced activity
+            humidity = random.gauss(80, 6)              # Hot/humid
+        elif condition == "lethargic":
+            temperature = random.gauss(base_temp, 0.3)  # Normal temp
+            heart_rate = int(random.gauss(base_hr - 8, 4))  # Low HR
+            motion = random.gauss(0.2, 0.08)            # Barely moving
+        elif condition == "low_battery":
+            temperature = random.gauss(base_temp, 0.35)
+            heart_rate = int(random.gauss(base_hr, 6))
+            motion = random.gauss(0.8, 0.2)
+        else:
+            temperature = random.gauss(base_temp, 0.3)
+            heart_rate = int(random.gauss(base_hr, 5))
+            motion = random.gauss(0.85, 0.2)
+
+        temperature = max(37.0, min(42.0, temperature))
+        heart_rate = max(45, min(125, heart_rate))
+        motion = max(0.0, min(2.0, motion))
+        humidity = max(30.0, min(95.0, humidity))
+        return temperature, heart_rate, motion, humidity
+
     def generate_livestock_readings(self, cursor, days=60):
-        """Generate historical health monitoring data"""
+        """Generate historical health monitoring data with varied conditions"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
+
         readings_per_day = 96  # Every 15 minutes
-        
+
         for device_id in self.device_ids:
             # Determine if this is a cow or sheep
             is_sheep = device_id.startswith('SHEEP')
-            
+
             # Base vitals (different for cows vs sheep)
             base_temp = 38.5 if not is_sheep else 39.0
             base_hr = 70 if not is_sheep else 75
-            
-            # Simulate gradual health trends
-            has_issue = random.random() < 0.2  # 20% chance of health issue
-            issue_start = start_date + timedelta(days=random.randint(30, 50)) if has_issue else None
-            
+
+            condition = self.conditions.get(device_id, "healthy")
+            # The abnormal window starts partway through so history trends in.
+            # "recovering" animals were sick and returned to normal recently.
+            issue_start = start_date + timedelta(days=random.randint(35, 50))
+            recovered_on = end_date - timedelta(days=random.randint(2, 5))
+
+            # Each animal has a home base spread across the Chennai area (~5 km),
+            # so the map shows animals apart and the heatmap shows real density.
+            home_lat = CHENNAI_LAT + random.uniform(-0.035, 0.035)
+            home_lon = CHENNAI_LON + random.uniform(-0.035, 0.035)
+
             current_date = start_date
             while current_date <= end_date:
                 for reading_num in range(readings_per_day):
-                    timestamp = int(current_date.timestamp()) + (reading_num * 900)  # 15 min intervals
-                    
-                    # Check if animal has health issue
-                    is_sick = has_issue and issue_start and current_date >= issue_start
-                    
-                    # Generate realistic vitals
-                    if is_sick:
-                        temperature = random.gauss(40.5, 0.5)  # Fever
-                        heart_rate = int(random.gauss(90, 5))  # Elevated HR
-                        motion = random.gauss(0.3, 0.1)  # Low activity
+                    # Actual moment of this reading (15-min intervals through the day)
+                    reading_dt = current_date + timedelta(seconds=reading_num * 900)
+                    timestamp = int(reading_dt.timestamp())
+
+                    # Is the animal in its abnormal window right now?
+                    if condition == "healthy":
+                        active_issue = False
+                    elif condition == "recovering":
+                        # abnormal between issue_start and recovered_on, then healthy
+                        active_issue = issue_start <= current_date <= recovered_on
+                        eff_condition = "fever"
                     else:
-                        temperature = random.gauss(base_temp, 0.3)
-                        heart_rate = int(random.gauss(base_hr, 5))
-                        motion = random.gauss(0.8, 0.2)
-                    
-                    # Clamp values to realistic ranges
-                    temperature = max(37.0, min(42.0, temperature))
-                    heart_rate = max(50, min(120, heart_rate))
-                    motion = max(0.0, min(2.0, motion))
-                    
-                    # Add some randomness to location
-                    lat = 40.7128 + random.uniform(-0.01, 0.01)
-                    lon = -74.0060 + random.uniform(-0.01, 0.01)
-                    
-                    battery = max(10, 100 - ((end_date - current_date).days * 0.5))
-                    
+                        active_issue = current_date >= issue_start
+                        eff_condition = condition
+
+                    cond_for_vitals = eff_condition if condition != "healthy" else "healthy"
+                    temperature, heart_rate, motion, humidity = self._vitals_for(
+                        cond_for_vitals, base_temp, base_hr, active_issue
+                    )
+
+                    # Animal grazes around its home base (~300 m wander)
+                    lat = home_lat + random.uniform(-0.003, 0.003)
+                    lon = home_lon + random.uniform(-0.003, 0.003)
+
+                    # Battery: low_battery devices drain faster and sit low
+                    if condition == "low_battery":
+                        battery = max(6, 45 - ((end_date - current_date).days * 0.4))
+                    else:
+                        battery = max(20, 100 - ((end_date - current_date).days * 0.5))
+                    ambient = random.gauss(28 if condition == "heat_stress" else 24, 3)
+
                     cursor.execute('''
                         INSERT OR IGNORE INTO livestock_readings
-                        (device_id, timestamp, temperature, body_temperature, 
-                         heart_rate, motion_magnitude, latitude, longitude, 
-                         battery, received_time)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (device_id, timestamp, temperature, body_temperature,
+                         heart_rate, motion_magnitude, latitude, longitude,
+                         battery, humidity, ambient_temperature, received_time)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (device_id, timestamp, temperature, temperature,
                           heart_rate, motion, lat, lon, int(battery),
-                          current_date.strftime('%Y-%m-%d %H:%M:%S')))
-                
+                          round(humidity, 1), round(ambient, 1),
+                          reading_dt.strftime('%Y-%m-%d %H:%M:%S')))
+
                 current_date += timedelta(days=1)
     
     def create_animal_profiles(self, cursor):
@@ -311,44 +387,59 @@ class DemoDataGenerator:
                     ''', (farm_id, device_id))
     
     def generate_alerts(self, cursor):
-        """Generate some sample alerts"""
-        alert_data = [
-            ('CRITICAL', 'High temperature detected (40.5°C)'),
-            ('WARNING', 'Elevated heart rate (88 BPM)'),
-            ('WARNING', 'Battery low (15%)'),
-            ('INFO', 'Low activity detected')
-        ]
-        
-        # Create a few alerts for demonstration
-        for i in range(5):
-            device_id = random.choice(self.device_ids)
-            alert_type, alert_message = random.choice(alert_data)
-            alert_time = datetime.now() - timedelta(hours=random.randint(1, 48))
-            
+        """Generate sample alerts that match each animal's actual condition"""
+        # Condition-driven alerts so the alert feed reflects the herd's state
+        condition_alerts = {
+            "fever": ('CRITICAL', 'High temperature detected (40.6°C)', 40.6, 92),
+            "heat_stress": ('WARNING', 'Heat stress: elevated temp & humidity', 39.8, 88),
+            "lethargic": ('WARNING', 'Low activity / lethargy detected', 38.5, 62),
+            "low_battery": ('WARNING', 'Collar battery low (12%)', 38.5, 70),
+            "recovering": ('INFO', 'Animal recovering — vitals normalizing', 38.9, 74),
+        }
+
+        for device_id, condition in self.conditions.items():
+            if condition not in condition_alerts:
+                continue
+            alert_type, message, temp, hr = condition_alerts[condition]
+            # Recent alert time, spread over the last two days
+            alert_time = datetime.now() - timedelta(hours=random.randint(1, 40))
+            resolved = 1 if condition == "recovering" else 0
+            battery = 12 if condition == "low_battery" else random.randint(55, 95)
+            lat = CHENNAI_LAT + random.uniform(-0.03, 0.03)
+            lon = CHENNAI_LON + random.uniform(-0.03, 0.03)
+
             cursor.execute('''
-                INSERT INTO alerts 
-                (device_id, alert_type, alert_message, alert_time, resolved)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (device_id, alert_type, alert_message,
-                  alert_time.strftime('%Y-%m-%d %H:%M:%S'),
-                  random.choice([0, 0, 1])))  # Most unresolved
+                INSERT INTO alerts
+                (device_id, alert_type, alert_message, alert_time, resolved,
+                 temperature, heart_rate, battery, latitude, longitude)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (device_id, alert_type, message,
+                  alert_time.strftime('%Y-%m-%d %H:%M:%S'), resolved,
+                  temp, hr, battery, lat, lon))
 
     def clear_demo_data(self):
-        """Clear all demo data (use with caution!)"""
+        """Clear ALL mock data for a clean slate (use with caution!)"""
         print("⚠️  Clearing all data...")
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM livestock_readings WHERE 1=1')
-        cursor.execute('DELETE FROM milk_production WHERE recorded_by = "demo_generator"')
-        cursor.execute('DELETE FROM alerts WHERE 1=1')
-        cursor.execute('DELETE FROM farm_animals WHERE 1=1')
-        cursor.execute('DELETE FROM animal_profiles WHERE 1=1')
+
+        # Wipe everything so no stale/inconsistent device IDs remain
+        cursor.execute('DELETE FROM livestock_readings')
+        cursor.execute('DELETE FROM milk_production')
+        cursor.execute('DELETE FROM alerts')
+        cursor.execute('DELETE FROM farm_animals')
+        cursor.execute('DELETE FROM animal_profiles')
         cursor.execute('DELETE FROM farms WHERE farm_code != "MAIN"')
-        
+        # Optional tables that may hold demo rows
+        for tbl in ('geofence_violations', 'notification_log'):
+            try:
+                cursor.execute(f'DELETE FROM {tbl}')
+            except sqlite3.OperationalError:
+                pass
+
         conn.commit()
         conn.close()
-        print("✅ Demo data cleared")
+        print("✅ All mock data cleared")
 
 
 def main():

@@ -248,7 +248,7 @@ class EmailNotificationService:
                     </center>
                 </div>
                 <div class="footer">
-                    <p>Smart Pastoralism Monitoring System</p>
+                    <p>PawTrack Monitoring System</p>
                     <p>This is an automated alert. Do not reply to this email.</p>
                 </div>
             </div>
@@ -259,7 +259,7 @@ class EmailNotificationService:
     def _create_alert_email_text(self, alert: Dict) -> str:
         """Create plain text email body for alert"""
         return f'''
-        SMART PASTORALISM ALERT
+        PAWTRACK ALERT
         =======================
         
         Alert Type: {alert.get('alert_type', 'Alert')}
@@ -277,7 +277,7 @@ class EmailNotificationService:
         View details: http://{settings.RPI_HOST}:{settings.PORT}/dashboard/animals/{alert.get('device_id', '')}
         
         --
-        Smart Pastoralism Monitoring System
+        PawTrack Monitoring System
         '''
 
 

@@ -1,111 +1,78 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Pastoralism System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gradient-to-br from-green-400 via-blue-500 to-purple-600">
-    <nav class="bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 py-4">
-            <div class="flex justify-between items-center">
-                <div class="flex items-center">
-                    <span class="text-3xl">🐄</span>
-                    <span class="ml-3 text-2xl font-bold text-gray-900">{{ app_name }}</span>
-                </div>
-                <a href="/auth/login" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
-                    Login
-                </a>
-            </div>
-        </div>
+{% extends "public-base.html" %}
+{% from 'components/icons.html' import icon %}
+
+{% block title %}{{ app_name }} · Livestock care, in the field{% endblock %}
+
+{% block page_content %}
+<div class="max-w-[1180px] mx-auto px-4 sm:px-9">
+    <!-- Nav -->
+    <nav class="flex items-center justify-between py-6">
+        <a href="/" class="flex items-center gap-2.5">
+            <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg" style="background:var(--brand);color:#fff">{{ icon('animals', 'w-5 h-5') }}</span>
+            <span class="fk-display text-xl font-extrabold">{{ app_name }}</span>
+        </a>
+        <a href="/auth/login" class="fk-btn fk-btn-ghost">Sign in</a>
     </nav>
-    
-    <div class="min-h-screen flex items-center justify-center px-4">
-        <div class="max-w-4xl w-full">
-            <div class="text-center text-white mb-12">
-                <h1 class="text-6xl font-bold mb-4">🐮 Smart Pastoralism</h1>
-                <p class="text-2xl mb-8">Real-time IoT Livestock Monitoring & Health Analytics</p>
-            </div>
-            
-            <div class="grid md:grid-cols-3 gap-6 mb-12">
-                <div class="bg-white rounded-xl shadow-xl p-6 transform hover:scale-105 transition">
-                    <div class="text-5xl mb-4">📡</div>
-                    <h3 class="text-xl font-bold mb-2">LoRa Monitoring</h3>
-                    <p class="text-gray-600">Real-time data from ESP32 sensors via LoRa network</p>
-                </div>
-                
-                <div class="bg-white rounded-xl shadow-xl p-6 transform hover:scale-105 transition">
-                    <div class="text-5xl mb-4">🗺️</div>
-                    <h3 class="text-xl font-bold mb-2">Live Tracking</h3>
-                    <p class="text-gray-600">GPS location tracking and geofencing alerts</p>
-                </div>
-                
-                <div class="bg-white rounded-xl shadow-xl p-6 transform hover:scale-105 transition">
-                    <div class="text-5xl mb-4">🏥</div>
-                    <h3 class="text-xl font-bold mb-2">Health Analytics</h3>
-                    <p class="text-gray-600">AI-powered disease detection and alerts</p>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-2xl shadow-2xl p-8">
-                <h2 class="text-3xl font-bold text-center mb-6">Features</h2>
-                <div class="grid md:grid-cols-2 gap-4">
-                    <div class="flex items-start">
-                        <span class="text-2xl mr-3">✅</span>
-                        <div>
-                            <h4 class="font-semibold">Real-time Dashboard</h4>
-                            <p class="text-sm text-gray-600">Live monitoring of all livestock parameters</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start">
-                        <span class="text-2xl mr-3">✅</span>
-                        <div>
-                            <h4 class="font-semibold">Temperature & Heart Rate</h4>
-                            <p class="text-sm text-gray-600">Continuous health monitoring</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start">
-                        <span class="text-2xl mr-3">✅</span>
-                        <div>
-                            <h4 class="font-semibold">Alert System</h4>
-                            <p class="text-sm text-gray-600">Instant notifications for critical conditions</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start">
-                        <span class="text-2xl mr-3">✅</span>
-                        <div>
-                            <h4 class="font-semibold">Historical Analytics</h4>
-                            <p class="text-sm text-gray-600">Trend analysis and reporting</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start">
-                        <span class="text-2xl mr-3">✅</span>
-                        <div>
-                            <h4 class="font-semibold">REST API</h4>
-                            <p class="text-sm text-gray-600">Full API access for integrations</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start">
-                        <span class="text-2xl mr-3">✅</span>
-                        <div>
-                            <h4 class="font-semibold">WebSocket Updates</h4>
-                            <p class="text-sm text-gray-600">Live data streaming</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mt-8 text-center">
-                    <a href="/auth/login" class="inline-block bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:shadow-lg transform hover:scale-105 transition">
-                        Access Dashboard →
-                    </a>
-                </div>
-            </div>
-            
-            <div class="mt-8 text-center text-white text-sm">
-                <p>Powered by Raspberry Pi 5 | FastAPI | WebSocket | LoRa</p>
+
+    <!-- Hero -->
+    <section class="grid lg:grid-cols-[1.1fr_1fr] gap-10 items-center pt-10 pb-16 lg:pt-16">
+        <div>
+            <p class="fk-eyebrow">LoRa collars · Raspberry Pi · Chennai</p>
+            <h1 class="fk-display font-extrabold text-[44px] sm:text-[58px] leading-[1.02] tracking-tight mt-4">
+                Know which animal needs you, before it's too late.
+            </h1>
+            <p class="text-lg fk-muted mt-5 max-w-[34rem]">
+                {{ app_name }} reads temperature, heart rate and location from every collar in your herd,
+                and tells your team, in plain words, who to check on first.
+            </p>
+            <div class="flex flex-wrap gap-3 mt-8">
+                <a href="/auth/login" class="fk-btn fk-btn-primary">Open the dashboard {{ icon('arrow-right', 'w-[18px] h-[18px]') }}</a>
+                <a href="/docs" class="fk-btn fk-btn-ghost">API docs</a>
             </div>
         </div>
-    </div>
-</body>
-</html>
+
+        <!-- A field-notebook preview of the overview -->
+        <div class="fk-card p-5" aria-hidden="true">
+            <p class="fk-eyebrow">Needs help now</p>
+            <div class="fk-emerg-card p-4 mt-3 flex gap-3.5">
+                <span class="w-12 h-12 rounded-lg flex items-center justify-center flex-none" style="background:var(--emerg-tint);color:var(--emerg)">{{ icon('animals', 'w-6 h-6') }}</span>
+                <div class="min-w-0">
+                    <p class="fk-mono text-xs"><b>COW-001</b> <span class="fk-muted-2">· 12m ago</span></p>
+                    <p class="font-semibold mt-0.5">Bessie <span class="font-normal fk-muted">· High heart rate (81 BPM)</span></p>
+                    <p class="text-sm fk-muted-2">Main Farm, Guindy</p>
+                </div>
+            </div>
+            <div class="fk-kpis mt-4 border rounded-[10px]" style="border-color:var(--line-soft)">
+                <div class="!p-4"><p class="fk-eyebrow">Tracked</p><p class="fk-display font-extrabold text-2xl mt-2">15</p></div>
+                <div class="!p-4"><p class="fk-eyebrow">Watch</p><p class="fk-display font-extrabold text-2xl mt-2">4</p></div>
+                <div class="!p-4"><p class="fk-eyebrow">Avg temp</p><p class="fk-display font-extrabold text-2xl mt-2">39.0°</p></div>
+                <div class="!p-4"><p class="fk-eyebrow">Healthy</p><p class="fk-display font-extrabold text-2xl mt-2">53%</p></div>
+            </div>
+            <ul class="mt-4 text-sm">
+                <li class="flex items-center gap-2.5 py-2.5 border-t" style="border-color:var(--line-soft)"><span class="fk-dot fk-dot-prog"></span>Heat stress, elevated temp<span class="ml-auto fk-tag fk-tag-prog">Watch</span></li>
+                <li class="flex items-center gap-2.5 py-2.5 border-t" style="border-color:var(--line-soft)"><span class="fk-dot fk-dot-done"></span>Vitals normal<span class="ml-auto fk-tag fk-tag-done">Healthy</span></li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- What it does -->
+    <section class="grid md:grid-cols-3 gap-4 pb-16">
+        {% for ico, title, body in [
+            ('signal', 'Collars that talk over miles', 'ESP32 collars send readings over LoRa to a Raspberry Pi at the farm. No mobile signal needed.'),
+            ('map', 'Every animal on one map', 'Live GPS positions, grazing heatmaps and geofences that warn you when an animal strays.'),
+            ('heart', 'Early warning on health', 'Fever, heart rate and low activity are flagged early, with AI checks for common diseases.')
+        ] %}
+        <div class="fk-card fk-card-pad">
+            <span class="inline-flex w-10 h-10 rounded-lg items-center justify-center" style="background:var(--brand-tint);color:var(--brand)">{{ icon(ico, 'w-5 h-5') }}</span>
+            <h2 class="fk-h2 mt-4">{{ title }}</h2>
+            <p class="fk-muted mt-2">{{ body }}</p>
+        </div>
+        {% endfor %}
+    </section>
+
+    <footer class="flex flex-col sm:flex-row justify-between gap-2 py-8 border-t text-sm fk-muted-2" style="border-color:var(--line)">
+        <span>{{ app_name }} · livestock monitoring for small farms</span>
+        <span class="fk-mono text-xs">FastAPI · LoRa · Raspberry Pi 5</span>
+    </footer>
+</div>
+{% endblock %}

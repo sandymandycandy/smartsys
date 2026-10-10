@@ -1,105 +1,153 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}Animals - Smart Pastoralism{% endblock %}
+{% block title %}Animals · PawTrack{% endblock %}
 
 {% block page_content %}
-<div>
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">🐮 All Animals</h1>
-        <p class="mt-2 text-sm text-gray-600">Livestock inventory and health status</p>
-    </div>
-
-    {% if animals %}
-    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device ID
-                    </th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Temperature</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Heart
-                        Rate</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Battery
-                    </th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location
-                    </th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alerts
-                    </th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last
-                        Update</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions
-                    </th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for animal in animals %}
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="flex items-center">
-                            {% if animal.device_id.startswith('SHEEP') %}<span class="text-2xl mr-2">🐑</span>{% else %}<span class="text-2xl mr-2">🐄</span>{% endif %}
-                            <span class="font-medium text-gray-900">{{ animal.device_id }}</span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span
-                            class="{% if animal.temperature > 39.5 %}text-red-600{% elif animal.temperature > 39.0 %}text-yellow-600{% else %}text-green-600{% endif %} font-semibold">
-                            {{ "%.1f"|format(animal.temperature) }}°C
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span
-                            class="{% if animal.heart_rate > 80 %}text-red-600{% elif animal.heart_rate > 75 %}text-yellow-600{% else %}text-green-600{% endif %} font-semibold">
-                            {{ animal.heart_rate }} BPM
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="flex items-center">
-                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
-                                <div class="{% if animal.battery > 50 %}bg-green-500{% elif animal.battery > 20 %}bg-yellow-500{% else %}bg-red-500{% endif %} h-2 rounded-full"
-                                    style="width: {{ animal.battery }}%"></div>
-                            </div>
-                            <span class="text-sm text-gray-600">{{ animal.battery }}%</span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {% if animal.latitude and animal.longitude %}
-                        {{ "%.4f"|format(animal.latitude) }}, {{ "%.4f"|format(animal.longitude) }}
-                        {% else %}
-                        No GPS
-                        {% endif %}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        {% if animal.alert_count > 0 %}
-                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                            {{ animal.alert_count }} alerts
-                        </span>
-                        {% else %}
-                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                            Healthy
-                        </span>
-                        {% endif %}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {{ animal.received_time }}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        <a href="/dashboard/animals/{{ animal.device_id }}"
-                            class="text-blue-600 hover:text-blue-800 font-medium">
-                            View Details →
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="bg-white rounded-lg shadow-lg p-12 text-center">
-        <span class="text-6xl">🐮</span>
-        <h3 class="mt-4 text-xl font-semibold text-gray-900">No Animals Found</h3>
-        <p class="mt-2 text-gray-600">Waiting for data from LoRa receivers...</p>
-    </div>
-    {% endif %}
+{% if not o or not o.animals %}
+<header class="mb-7">
+    <p class="fk-eyebrow">Herd</p>
+    <h1 class="fk-h1 mt-2">Animals</h1>
+</header>
+<div class="fk-card p-12 text-center">
+    <p class="fk-h2">No collars have reported yet.</p>
+    <p class="fk-muted mt-2">Animals appear here as soon as the LoRa receiver hears from them.</p>
 </div>
+{% else %}
+<div x-data="animalsPage()" @keydown.window="onKey($event)">
+    <header class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-7">
+        <div>
+            <p class="fk-eyebrow">Herd · {{ o.contacts|length }} farms</p>
+            <h1 class="fk-h1 mt-2">{{ o.kpi.tracked }} animals on collar</h1>
+            <p class="fk-muted mt-2">
+                <span x-text="attention"></span> need a look. The rest are grazing normally.
+            </p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3">
+            <label class="relative sm:w-72">
+                <span class="sr-only">Search animals</span>
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 fk-muted-2">{{ icon('search', 'w-4 h-4') }}</span>
+                <input x-ref="search" x-model="query" type="search" class="fk-input pl-9 pr-10" placeholder="Search name, breed, ID">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 fk-kbd hidden sm:inline">/</span>
+            </label>
+            <label class="sm:w-56">
+                <span class="sr-only">Farm</span>
+                <select x-model="farm" class="fk-input">
+                    <option value="">All farms</option>
+                    {% for c in o.contacts %}<option>{{ c.farm }}</option>{% endfor %}
+                </select>
+            </label>
+        </div>
+    </header>
+
+    <section class="fk-card">
+        <div class="fk-tabs px-3 pt-1" role="tablist" style="overflow-x:auto;overflow-y:hidden;scrollbar-width:none">
+            <template x-for="t in tabs" :key="t.id">
+                <button class="fk-tab" role="tab" :aria-selected="tab === t.id" @click="tab = t.id">
+                    <span x-text="t.label"></span><span class="fk-count" x-text="countFor(t.id)"></span>
+                </button>
+            </template>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="fk-table">
+                <thead>
+                    <tr>
+                        <th>Animal</th>
+                        <th>Condition</th>
+                        <th class="hidden lg:table-cell">Farm</th>
+                        <th class="text-right hidden sm:table-cell">Temp</th>
+                        <th class="text-right hidden sm:table-cell">Heart</th>
+                        <th class="hidden md:table-cell">Collar</th>
+                        <th class="hidden sm:table-cell">Status</th>
+                        <th class="hidden md:table-cell text-right whitespace-nowrap">Last seen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="a in rows" :key="a.device_id">
+                        <tr class="cursor-pointer" @click="window.location = '/dashboard/animals/' + a.device_id">
+                            <td class="whitespace-nowrap">
+                                <a :href="'/dashboard/animals/' + a.device_id" class="font-semibold" x-text="a.name || a.device_id"></a>
+                                <span class="block fk-mono text-[11px] fk-muted-2" x-text="a.device_id + ' · ' + (a.breed || a.kind)"></span>
+                                <span class="fk-tag mt-1.5 sm:hidden" :class="tagClass(a.status)" x-text="statusLabel(a.status)"></span>
+                            </td>
+                            <td>
+                                <span class="flex items-center gap-2 sm:min-w-[180px]">
+                                    <span class="fk-dot" :class="dotClass(a.status)"></span>
+                                    <span x-text="a.condition"></span>
+                                </span>
+                            </td>
+                            <td class="hidden lg:table-cell fk-muted" x-text="a.farm"></td>
+                            <td class="text-right fk-mono text-[13px] whitespace-nowrap hidden sm:table-cell"
+                                :style="a.temp > 39.5 ? 'color:var(--emerg);font-weight:700' : a.temp > 39.3 ? 'color:var(--prog-text);font-weight:700' : ''"
+                                x-text="a.temp ? a.temp.toFixed(1) + '°' : '--'"></td>
+                            <td class="text-right fk-mono text-[13px] hidden sm:table-cell whitespace-nowrap"
+                                :style="a.hr > 80 ? 'color:var(--emerg);font-weight:700' : a.hr > 75 ? 'color:var(--prog-text);font-weight:700' : ''"
+                                x-text="a.hr ? a.hr + ' bpm' : '--'"></td>
+                            <td class="hidden md:table-cell">
+                                <span class="flex items-center gap-2">
+                                    <span class="fk-track w-14"><span class="fk-fill block" :style="'width:' + (a.battery || 0) + '%;' + (a.battery < 20 ? 'background:var(--emerg)' : a.battery < 50 ? 'background:var(--prog)' : '')"></span></span>
+                                    <span class="fk-mono text-[11px] fk-muted-2" x-text="(a.battery ?? '--') + '%'"></span>
+                                </span>
+                            </td>
+                            <td class="hidden sm:table-cell"><span class="fk-tag" :class="tagClass(a.status)" x-text="statusLabel(a.status)"></span></td>
+                            <td class="hidden md:table-cell text-right fk-mono text-xs fk-muted-2" x-text="a.last_seen + ' ago'"></td>
+                        </tr>
+                    </template>
+                    <tr x-show="!rows.length">
+                        <td colspan="8" class="text-center py-12 fk-muted-2">No animals match those filters.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<script>
+    var FK_ANIMALS = {{ o.animals | tojson }};
+
+    function animalsPage() {
+        return {
+            animals: FK_ANIMALS,
+            tab: 'all',
+            query: '',
+            farm: '',
+            tabs: [
+                { id: 'all', label: 'All' },
+                { id: 'critical', label: 'Needs help' },
+                { id: 'watch', label: 'Watch' },
+                { id: 'healthy', label: 'Healthy' }
+            ],
+            get attention() { return this.animals.filter(function (a) { return a.status === 'critical' || a.status === 'watch'; }).length; },
+            matchesTab: function (a, id) {
+                if (id === 'all') return true;
+                if (id === 'watch') return a.status === 'watch' || a.status === 'recovering';
+                return a.status === id;
+            },
+            get rows() {
+                var q = this.query.trim().toLowerCase(), self = this;
+                return this.animals.filter(function (a) {
+                    if (!self.matchesTab(a, self.tab)) return false;
+                    if (self.farm && a.farm !== self.farm) return false;
+                    if (!q) return true;
+                    return [a.device_id, a.name, a.breed, a.kind, a.farm, a.condition].join(' ').toLowerCase().indexOf(q) !== -1;
+                });
+            },
+            countFor: function (id) {
+                var self = this;
+                return this.animals.filter(function (a) { return self.matchesTab(a, id) && (!self.farm || a.farm === self.farm); }).length;
+            },
+            statusLabel: function (s) { return { critical: 'Needs help', watch: 'Watch', recovering: 'Being checked', healthy: 'Healthy' }[s]; },
+            tagClass: function (s) { return { critical: 'fk-tag-emerg', watch: 'fk-tag-prog', recovering: 'fk-tag-recov', healthy: 'fk-tag-done' }[s]; },
+            dotClass: function (s) { return { critical: 'fk-dot-emerg', watch: 'fk-dot-prog', recovering: 'fk-dot-recov', healthy: 'fk-dot-done' }[s]; },
+            onKey: function (e) {
+                var tag = (e.target.tagName || '').toLowerCase();
+                if (e.key === '/' && tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+                    e.preventDefault();
+                    this.$refs.search.focus();
+                }
+            }
+        };
+    }
+</script>
+{% endif %}
 {% endblock %}

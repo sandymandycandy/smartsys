@@ -1,159 +1,73 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}User Management - Smart Pastoralism{% endblock %}
+{% block title %}Team · PawTrack{% endblock %}
 
 {% block page_content %}
-<div class="max-w-6xl mx-auto">
-    <div class="mb-8 flex items-center justify-between">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900">👥 User Management</h1>
-            <p class="mt-2 text-sm text-gray-600">Manage system users and permissions</p>
-        </div>
-        <a href="/auth/profile" class="inline-flex items-center text-blue-600 hover:text-blue-800">
-            ← Back to Profile
-        </a>
-    </div>
+{% set ok = request.query_params.get('success') %}
+{% set err = request.query_params.get('error') %}
+{% set admins = users|selectattr('role', 'equalto', 'admin')|list|length %}
 
-    <!-- Success/Error Messages -->
-    {% if request.query_params.get('success') == 'user_created' %}
-    <div class="bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-        <span class="text-xl mr-2">✅</span>
-        <span>User created successfully!</span>
-    </div>
-    {% elif request.query_params.get('success') == 'user_deleted' %}
-    <div class="bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-        <span class="text-xl mr-2">✅</span>
-        <span>User deleted successfully!</span>
-    </div>
-    {% endif %}
+<header class="mb-7">
+    <p class="fk-eyebrow">System</p>
+    <h1 class="fk-h1 mt-2">The team</h1>
+    <p class="fk-muted mt-2">{{ users|length }} {{ 'person can' if users|length == 1 else 'people can' }} sign in, {{ admins }} of them {{ 'an administrator' if admins == 1 else 'administrators' }}.</p>
+</header>
 
-    {% if request.query_params.get('error') == 'username_exists' %}
-    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-        <span class="text-xl mr-2">⚠️</span>
-        <span>Username already exists</span>
-    </div>
-    {% elif request.query_params.get('error') == 'cannot_delete_self' %}
-    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-        <span class="text-xl mr-2">⚠️</span>
-        <span>You cannot delete your own account</span>
-    </div>
-    {% endif %}
+{% if ok %}
+<p class="fk-notice fk-notice-ok mb-6" role="status">{{ {'user_created': 'Added. Share the username and password with them.', 'user_deleted': 'Removed. Their sessions were signed out.'}.get(ok, 'Done.') }}</p>
+{% endif %}
+{% if err %}
+<p class="fk-notice fk-notice-err mb-6" role="alert">{{ {'username_exists': 'That username is taken. Pick another.', 'cannot_delete_self': "You can't remove your own account."}.get(err, 'Something went wrong. Try again.') }}</p>
+{% endif %}
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Create User Form -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h2 class="text-xl font-semibold mb-6 flex items-center">
-                <span class="text-2xl mr-2">➕</span> Create New User
-            </h2>
-
-            <form action="/auth/admin/users/create" method="post" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                    <input type="text" name="username" required minlength="3" placeholder="Enter username"
-                        autocomplete="username"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+<div class="grid gap-7 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <section class="fk-card min-w-0" aria-labelledby="team-h" x-data="{ removing: null }">
+        <div class="px-5 pt-5 pb-3"><h2 id="team-h" class="fk-h2">Who has access</h2></div>
+        <ul class="border-t" style="border-color:var(--line-soft)">
+            {% for u in users %}
+            <li class="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b last:border-b-0" style="border-color:var(--line-soft)">
+                <span class="fk-avatar">{{ u.username[0]|upper }}</span>
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold">{{ u.username }}{% if u.id == user.user_id %} <span class="fk-muted-2 font-normal">· you</span>{% endif %}</p>
+                    <p class="fk-mono text-[11px] fk-muted-2">
+                        {% if u.last_login %}last in {{ u.last_login[:16]|replace('T', ' ') }}{% else %}never signed in{% endif %} · added {{ (u.created_at or '')[:10] }}
+                    </p>
                 </div>
+                <span class="fk-tag {{ 'fk-tag-done' if u.role == 'admin' else 'fk-tag-plain' }}">{{ 'Admin' if u.role == 'admin' else 'Member' }}</span>
+                {% if u.id != user.user_id %}
+                <button type="button" class="fk-btn fk-btn-quiet fk-btn-sm" x-show="removing !== {{ u.id }}" @click="removing = {{ u.id }}">Remove</button>
+                <form action="/auth/admin/users/{{ u.id }}/delete" method="post" class="flex gap-2" x-show="removing === {{ u.id }}" x-cloak>
+                    <button type="button" class="fk-btn fk-btn-ghost fk-btn-sm" @click="removing = null">Keep</button>
+                    <button type="submit" class="fk-btn fk-btn-emerg fk-btn-sm">Remove {{ u.username }}</button>
+                </form>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                    <input type="password" name="password" required minlength="6" placeholder="Enter password"
-                        autocomplete="new-password"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <p class="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <select name="role"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                        <option value="user">User</option>
-                        <option value="admin">Administrator</option>
-                    </select>
-                </div>
-
-                <button type="submit"
-                    class="w-full bg-purple-600 text-white py-2 rounded-lg font-medium hover:bg-purple-700 transition">
-                    Create User
-                </button>
-            </form>
-        </div>
-
-        <!-- Users List -->
-        <div class="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
-            <h2 class="text-xl font-semibold mb-6 flex items-center">
-                <span class="text-2xl mr-2">📋</span> All Users
-            </h2>
-
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        {% for u in users %}
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-4 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <div
-                                        class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                                        {{ u.username[0]|upper }}
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="font-medium text-gray-900">{{ u.username }}</p>
-                                        <p class="text-xs text-gray-500">ID: {{ u.id }}</p>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
-                                {% if u.role == 'admin' %}
-                                <span
-                                    class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                                    Admin
-                                </span>
-                                {% else %}
-                                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                    User
-                                </span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
-                                {{ u.created_at[:10] if u.created_at else 'N/A' }}
-                            </td>
-                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
-                                {{ u.last_login[:10] if u.last_login else 'Never' }}
-                            </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
-                                {% if u.id != user.user_id %}
-                                <form action="/auth/admin/users/{{ u.id }}/delete" method="post"
-                                    onsubmit="return confirm('Are you sure you want to delete this user?');">
-                                    <button type="submit"
-                                        class="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition">
-                                        Delete
-                                    </button>
-                                </form>
-                                {% else %}
-                                <span class="text-sm text-gray-400">Current user</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    <section class="fk-card fk-card-pad" aria-labelledby="add-h">
+        <h2 id="add-h" class="fk-h2">Add someone</h2>
+        <form action="/auth/admin/users/create" method="post" class="space-y-4 mt-5">
+            <div>
+                <label class="fk-label" for="nu-name">Username</label>
+                <input id="nu-name" class="fk-input" type="text" name="username" required minlength="3" autocomplete="off">
             </div>
-
-            {% if users|length == 0 %}
-            <div class="text-center py-8 text-gray-500">
-                <span class="text-4xl">👥</span>
-                <p class="mt-2">No users found</p>
+            <div>
+                <label class="fk-label" for="nu-pw">Starting password</label>
+                <input id="nu-pw" class="fk-input" type="password" name="password" required minlength="6" autocomplete="new-password">
+                <p class="fk-hint">At least 6 characters. They can change it from their account page.</p>
             </div>
-            {% endif %}
-        </div>
-    </div>
+            <div>
+                <label class="fk-label" for="nu-role">Role</label>
+                <select id="nu-role" class="fk-input" name="role">
+                    <option value="user">Member: sees the herd, handles alerts</option>
+                    <option value="admin">Admin: can also manage the team</option>
+                </select>
+            </div>
+            <button type="submit" class="fk-btn fk-btn-primary">{{ icon('plus', 'w-[18px] h-[18px]') }}Add to team</button>
+        </form>
+    </section>
 </div>
 {% endblock %}

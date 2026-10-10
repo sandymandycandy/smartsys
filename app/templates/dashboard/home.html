@@ -1,250 +1,414 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}Dashboard - Smart Pastoralism{% endblock %}
+{% block title %}Overview · PawTrack{% endblock %}
 
 {% block page_content %}
-<div x-data="dashboard()" x-init="init()">
-    <!-- Header -->
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">🐄 Dashboard</h1>
-        <p class="mt-2 text-sm text-gray-600">Real-time livestock monitoring overview</p>
-    </div>
+{% if not o %}
+<div class="fk-card fk-card-pad">
+    <h1 class="fk-h2">We couldn't read the herd database</h1>
+    <p class="fk-muted mt-2">Check that the LoRa receiver has written <code>livestock_data.db</code>, then reload.</p>
+</div>
+{% else %}
+<div x-data="overview()" x-init="init()" @keydown.window="onKey($event)">
 
-    <!-- Stats Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <!-- Total Animals -->
-        <div class="bg-white rounded-lg shadow-lg p-6 transform hover:scale-105 transition">
-            <div class="flex items-center">
-                <div class="flex-1">
-                    <p class="text-sm font-medium text-gray-600">Total Animals</p>
-                    <p class="mt-2 text-3xl font-semibold text-gray-900">{{ stats.total }}</p>
-                </div>
-                <div class="ml-4 flex-shrink-0">
-                    <span class="text-4xl">🐮</span>
-                </div>
-            </div>
+    <!-- 1. Header -->
+    <header class="flex flex-col xl:flex-row xl:items-end justify-between gap-5 mb-7">
+        <div>
+            <p class="fk-eyebrow">{{ o.today.strftime('%A %d %B') }}{% if o.city %} · {{ o.city }}{% endif %}<span id="hdr-weather"></span></p>
+            <h1 class="fk-h1 mt-2" x-show="waiting > 0">
+                <span x-text="greeting"></span>
+                <span x-text="waiting"></span>
+                <span x-text="waiting === 1 ? 'animal needs' : 'animals need'"></span> you now.
+            </h1>
+            <h1 class="fk-h1 mt-2" x-show="waiting === 0" x-cloak>
+                <span x-text="greeting"></span> The herd is settled.
+            </h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <label class="relative flex-1 xl:w-72">
+                <span class="sr-only">Search animals</span>
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 fk-muted-2">{{ icon('search', 'w-4 h-4') }}</span>
+                <input x-ref="search" x-model="query" type="search" class="fk-input pl-9 pr-10"
+                    placeholder="Search animal, farm, ID">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 fk-kbd hidden sm:inline">/</span>
+            </label>
+            <a href="/dashboard/map" class="fk-btn fk-btn-primary">{{ icon('map', 'w-[18px] h-[18px]') }}<span class="hidden sm:inline">Open live map</span></a>
+        </div>
+    </header>
+
+    <!-- 2. Needs help now -->
+    <section id="needs-help" class="mb-7 scroll-mt-14" aria-labelledby="needs-help-h">
+        <div class="flex items-baseline justify-between mb-3">
+            <h2 id="needs-help-h" class="fk-h2 flex items-center gap-2.5">
+                <span class="fk-dot fk-dot-emerg" :class="waiting > 0 && 'fk-pulse'"></span>Needs help now
+            </h2>
+            <a href="/dashboard/alerts" class="text-sm font-semibold" style="color:var(--brand)">All alerts</a>
         </div>
 
-        <!-- Healthy -->
-        <div class="bg-white rounded-lg shadow-lg p-6 transform hover:scale-105 transition">
-            <div class="flex items-center">
-                <div class="flex-1">
-                    <p class="text-sm font-medium text-gray-600">Healthy</p>
-                    <p class="mt-2 text-3xl font-semibold text-green-600">{{ stats.healthy }}</p>
-                </div>
-                <div class="ml-4 flex-shrink-0">
-                    <span class="text-4xl">✅</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Warnings -->
-        <div class="bg-white rounded-lg shadow-lg p-6 transform hover:scale-105 transition">
-            <div class="flex items-center">
-                <div class="flex-1">
-                    <p class="text-sm font-medium text-gray-600">Warnings</p>
-                    <p class="mt-2 text-3xl font-semibold text-yellow-600">{{ stats.warnings }}</p>
-                </div>
-                <div class="ml-4 flex-shrink-0">
-                    <span class="text-4xl">⚠️</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Critical Alerts -->
-        <div class="bg-white rounded-lg shadow-lg p-6 transform hover:scale-105 transition">
-            <div class="flex items-center">
-                <div class="flex-1">
-                    <p class="text-sm font-medium text-gray-600">Critical</p>
-                    <p class="mt-2 text-3xl font-semibold text-red-600">{{ stats.critical }}</p>
-                </div>
-                <div class="ml-4 flex-shrink-0">
-                    <span class="text-4xl">🚨</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Live Alerts Feed -->
-        <div class="lg:col-span-2 bg-white rounded-lg shadow-lg">
-            <div class="p-6 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-900">🔔 Recent Alerts</h2>
-            </div>
-            <div class="p-6 max-h-96 overflow-y-auto">
-                {% if alerts %}
-                {% for alert in alerts %}
-                <div
-                    class="mb-4 p-4 border rounded-lg {% if 'CRITICAL' in alert.alert_type %}border-red-200 bg-red-50{% elif 'WARNING' in alert.alert_type %}border-yellow-200 bg-yellow-50{% else %}border-blue-200 bg-blue-50{% endif %}">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <div class="flex items-center">
-                                <span class="font-semibold text-sm">{{ alert.alert_type }}</span>
-                                <span class="mx-2 text-gray-400">•</span>
-                                <span class="text-sm text-gray-600">{{ alert.device_id }}</span>
-                            </div>
-                            <p class="mt-1 text-sm text-gray-700">{{ alert.alert_message }}</p>
-                            <p class="mt-1 text-xs text-gray-500">{{ alert.alert_time }}</p>
+        <div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3" x-show="urgent.length">
+            <template x-for="a in urgent" :key="a.device_id">
+                <article class="fk-emerg-card p-4 flex gap-4" :class="a.handled && 'is-sent'">
+                    <div class="w-16 h-16 rounded-lg flex items-center justify-center flex-none"
+                        :style="a.handled ? 'background:var(--brand-tint);color:var(--brand)' : 'background:var(--emerg-tint);color:var(--emerg)'">
+                        {{ icon('animals', 'w-8 h-8') }}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 fk-mono text-xs">
+                            <span class="font-bold" x-text="a.device_id"></span>
+                            <span class="fk-muted-2">·</span>
+                            <span class="fk-muted-2" x-text="a.since + ' ago'"></span>
                         </div>
-                        <button data-alert-id="{{ alert.id }}"
-                            onclick="resolveAlert(this.getAttribute('data-alert-id'))"
-                            class="ml-4 text-sm text-blue-600 hover:text-blue-800">
-                            Resolve
+                        <p class="font-semibold mt-1 leading-snug">
+                            <span x-text="a.name || a.kind"></span><span class="fk-muted font-normal"
+                                x-text="' · ' + a.condition"></span>
+                        </p>
+                        <p class="text-sm fk-muted-2 mt-0.5 truncate" x-text="a.farm + (a.area ? ', ' + a.area : '')"></p>
+
+                        <div class="flex flex-wrap items-center gap-2 mt-3" x-show="!a.handled">
+                            <button class="fk-btn fk-btn-emerg fk-btn-sm" @click="handle(a)" :disabled="a.busy">
+                                {{ icon('check', 'w-4 h-4') }}<span x-text="a.busy ? 'Saving' : 'Mark checked'"></span>
+                            </button>
+                            <a class="fk-btn fk-btn-ghost fk-btn-sm" :href="'tel:' + a.phone" x-show="a.phone">
+                                {{ icon('phone', 'w-4 h-4') }}<span x-text="'Call ' + firstName(a.owner)"></span>
+                            </a>
+                        </div>
+                        <p class="mt-3 text-sm font-semibold flex items-center gap-1.5" style="color:var(--brand)" x-show="a.handled" x-cloak>
+                            {{ icon('check', 'w-4 h-4') }}<span x-text="firstName(a.owner) === 'farm' ? 'Checked, the farm is keeping watch' : 'Checked, ' + firstName(a.owner) + ' is keeping watch'"></span>
+                        </p>
+
+                        <!-- Pick a nearby vet and send them this animal's details on WhatsApp -->
+                        <div class="mt-3 pt-3 border-t" style="border-color:rgba(31,42,31,.1)">
+                            <button type="button" class="fk-btn fk-btn-sm" style="background:#1F7A3D;color:#fff"
+                                @click="$dispatch('contact-vet', { id: a.device_id })">
+                                {{ icon('message', 'w-4 h-4') }}Contact a vet
+                            </button>
+                        </div>
+                    </div>
+                </article>
+            </template>
+        </div>
+        <div class="fk-card fk-card-pad text-center" x-show="!urgent.length" x-cloak>
+            <p class="font-semibold">No animal is in danger right now.</p>
+            <p class="text-sm fk-muted-2 mt-1">You'll see them here the moment a collar reports something critical.</p>
+        </div>
+    </section>
+
+    <!-- 3. KPI strip -->
+    <section class="fk-card fk-kpis mb-7" aria-label="Herd at a glance">
+        <div>
+            <p class="fk-eyebrow">Animals tracked</p>
+            <p class="fk-kpi mt-3">{{ o.kpi.tracked }}</p>
+            <p class="text-sm fk-muted-2 mt-2">across {{ o.contacts|length }} farms</p>
+        </div>
+        <div>
+            <p class="fk-eyebrow">Need attention</p>
+            <p class="fk-kpi mt-3" x-text="attention">{{ o.kpi.attention }}</p>
+            <p class="text-sm fk-muted-2 mt-2">open health or location alerts</p>
+        </div>
+        <div>
+            <p class="fk-eyebrow">Avg body temp</p>
+            <p class="fk-kpi mt-3">{{ o.kpi.avg_temp if o.kpi.avg_temp is not none else '--' }}<span class="text-xl align-top ml-0.5">°C</span></p>
+            <p class="text-sm fk-muted-2 mt-2">normal range 38.0 to 39.3</p>
+        </div>
+        <div>
+            <p class="fk-eyebrow">Healthy</p>
+            <p class="fk-kpi mt-3" x-text="healthyPct + '%'">{{ o.kpi.healthy_pct }}%</p>
+            <p class="text-sm fk-muted-2 mt-2">{{ o.kpi.low_battery }} collar{{ '' if o.kpi.low_battery == 1 else 's' }} below 50% battery</p>
+        </div>
+    </section>
+
+    <div class="grid gap-7 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div class="min-w-0 space-y-7">
+
+            <!-- 4. Herd board -->
+            <section class="fk-card" aria-labelledby="board-h">
+                <div class="px-5 pt-5">
+                    <h2 id="board-h" class="fk-h2">Herd board</h2>
+                </div>
+                <div class="fk-tabs px-3 mt-3" style="overflow-x:auto;overflow-y:hidden;scrollbar-width:none" role="tablist">
+                    <template x-for="t in tabs" :key="t.id">
+                        <button class="fk-tab" role="tab" :aria-selected="tab === t.id" @click="tab = t.id">
+                            <span x-text="t.label"></span><span class="fk-count" x-text="countFor(t.id)"></span>
                         </button>
-                    </div>
+                    </template>
                 </div>
-                {% endfor %}
-                {% else %}
-                <p class="text-gray-500 text-center py-8">No active alerts ✅</p>
-                {% endif %}
+                <div class="overflow-x-auto">
+                    <table class="fk-table">
+                        <thead>
+                            <tr>
+                                <th>Animal</th>
+                                <th>Condition</th>
+                                <th class="hidden md:table-cell">Farm</th>
+                                <th>Status</th>
+                                <th class="hidden sm:table-cell text-right whitespace-nowrap">Last seen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="a in boardRows" :key="a.device_id">
+                                <tr class="cursor-pointer" @click="window.location = '/dashboard/animals/' + a.device_id">
+                                    <td>
+                                        <a :href="'/dashboard/animals/' + a.device_id" class="fk-mono text-[13px] font-bold" x-text="a.device_id"></a>
+                                        <span class="block text-xs fk-muted-2" x-text="(a.name ? a.name + ' · ' : '') + (a.breed || a.kind)"></span>
+                                    </td>
+                                    <td>
+                                        <span class="flex items-center gap-2">
+                                            <span class="fk-dot" :class="dotClass(a.status)"></span>
+                                            <span x-text="a.condition"></span>
+                                        </span>
+                                    </td>
+                                    <td class="hidden md:table-cell fk-muted" x-text="a.farm"></td>
+                                    <td><span class="fk-tag" :class="tagClass(a.status)" x-text="statusLabel(a.status)"></span></td>
+                                    <td class="hidden sm:table-cell text-right fk-mono text-xs fk-muted-2" x-text="a.last_seen + ' ago'"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="!boardRows.length">
+                                <td colspan="5" class="text-center py-10 fk-muted-2">No animals match.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div class="grid gap-7 lg:grid-cols-2">
+                <!-- 5. Alerts this week: paired bars -->
+                <section class="fk-card fk-card-pad" aria-labelledby="week-h">
+                    <div class="flex items-start justify-between gap-3">
+                        <h2 id="week-h" class="fk-h2">Alerts this week</h2>
+                        <div class="flex items-center gap-3 text-xs fk-muted">
+                            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm" style="background:#6FA052"></span>All</span>
+                            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm" style="background:var(--emerg)"></span>Critical</span>
+                        </div>
+                    </div>
+                    {% if o.week %}
+                    <div class="mt-5 grid grid-cols-7 gap-2 items-end h-40" role="img"
+                        aria-label="Alerts per day this week: {% for d in o.week %}{{ d.label }} {{ d.raised }} total, {{ d.critical }} critical{{ '; ' if not loop.last }}{% endfor %}">
+                        {% for d in o.week %}
+                        <div class="h-full flex flex-col justify-end" title="{{ d.date }}: {{ d.raised }} alerts, {{ d.critical }} critical">
+                            <div class="flex items-end justify-center gap-[2px] flex-1">
+                                {% for v, c in [(d.raised, '#6FA052'), (d.critical, 'var(--emerg)')] %}
+                                <div class="flex flex-col items-center justify-end h-full w-1/2 max-w-[14px]">
+                                    {% if v %}<span class="fk-mono text-[10px] fk-muted mb-1">{{ v }}</span>{% endif %}
+                                    <div class="w-full" style="height: {{ (v / o.week_max * 100)|round(1) if v else 0 }}%; min-height: {{ 2 if v else 0 }}px; background: {{ c }}; border-radius: 4px 4px 0 0;"></div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="grid grid-cols-7 gap-2 mt-2 pt-2 border-t" style="border-color:var(--line)">
+                        {% for d in o.week %}<span class="text-center fk-mono text-[11px] fk-muted-2">{{ d.label }}</span>{% endfor %}
+                    </div>
+                    <p class="text-sm fk-muted mt-4">
+                        {% if o.week_raised %}
+                        {{ o.week_raised }} alerts in the 7 days to {{ o.week[-1].date }}, {{ o.week_critical }} of them critical.
+                        {% if o.busiest %}{{ o.busiest.label }} was the busiest day.{% endif %}
+                        {% else %}A quiet week. No alerts were raised.{% endif %}
+                    </p>
+                    {% endif %}
+                </section>
+
+                <!-- 6. Hotspots -->
+                <section class="fk-card fk-card-pad" aria-labelledby="hot-h">
+                    <h2 id="hot-h" class="fk-h2">Hotspots</h2>
+                    <p class="text-sm fk-muted-2 mt-1">Farms ranked by animals that need attention</p>
+                    {% if o.hotspots %}
+                    <ol class="mt-5 space-y-4">
+                        {% for h in o.hotspots %}
+                        <li>
+                            <div class="flex items-baseline justify-between text-sm">
+                                <span><span class="font-semibold">{{ h.farm }}</span>{% if h.area %} <span class="fk-muted-2">· {{ h.area }}</span>{% endif %}</span>
+                                <span class="fk-mono font-bold text-[13px]">{{ h.count }}</span>
+                            </div>
+                            <div class="fk-track mt-2"><div class="fk-fill" style="width: {{ (h.count / o.hotspot_max * 100)|round(1) }}%; {% if loop.first %}background:var(--emerg){% endif %}"></div></div>
+                        </li>
+                        {% endfor %}
+                    </ol>
+                    {% else %}
+                    <p class="mt-6 text-sm fk-muted">No farm has animals on watch.</p>
+                    {% endif %}
+                </section>
             </div>
         </div>
 
-        <!-- Quick Stats -->
-        <div class="space-y-6">
-            <!-- Average Temperature -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">🌡️ Avg Temperature</h3>
-                <div class="text-center">
-                    <p class="text-4xl font-bold text-gray-900">{{ "%.1f"|format(stats.avg_temp) }}</p>
-                    <p class="text-sm text-gray-600">°C</p>
+        <aside class="space-y-7 min-w-0">
+            <!-- 7. Farm contacts -->
+            <section class="fk-card" aria-labelledby="contacts-h">
+                <div class="px-5 pt-5 pb-3">
+                    <h2 id="contacts-h" class="fk-h2">Farm contacts</h2>
                 </div>
-            </div>
+                <ul>
+                    {% for c in o.contacts %}
+                    <li class="flex items-center gap-3 px-5 py-3 border-t" style="border-color:var(--line-soft)">
+                        <span class="fk-avatar">{{ (c.name.split()|map('first')|join('')|upper)[:2] }}</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-semibold truncate">{{ c.name }}</p>
+                            <p class="text-xs fk-muted-2 truncate">{{ c.area }} · {{ c.herd }} animals{% if c.flagged %}, {{ c.flagged }} flagged{% endif %}</p>
+                        </div>
+                        {% if c.state == 'critical' %}<span class="fk-tag fk-tag-emerg">Urgent</span>
+                        {% elif c.state == 'watch' %}<span class="fk-tag fk-tag-prog">Watching</span>
+                        {% else %}<span class="fk-tag fk-tag-done">All calm</span>{% endif %}
+                        {% if c.phone %}<a href="tel:{{ c.phone }}" class="fk-btn fk-btn-quiet fk-btn-sm px-2" aria-label="Call {{ c.name }}">{{ icon('phone', 'w-4 h-4') }}</a>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </section>
 
-            <!-- Average Heart Rate -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">❤️ Avg Heart Rate</h3>
-                <div class="text-center">
-                    <p class="text-4xl font-bold text-gray-900">{{ stats.avg_hr|round|int }}</p>
-                    <p class="text-sm text-gray-600">BPM</p>
+            <!-- 8. Alerts -->
+            <section class="fk-card" aria-labelledby="alerts-h">
+                <div class="flex items-baseline justify-between px-5 pt-5 pb-3">
+                    <h2 id="alerts-h" class="fk-h2">Alerts</h2>
+                    <span class="fk-mono text-xs fk-muted-2" x-text="alerts.length + ' open'"></span>
                 </div>
-            </div>
-
-            <!-- Battery Status -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">🔋 Battery Status</h3>
-                <div class="space-y-2">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-600">Good (&gt;50%)</span>
-                        <span class="font-semibold">{{ stats.battery_good }}</span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-600">Low (20-50%)</span>
-                        <span class="font-semibold text-yellow-600">{{ stats.battery_low }}</span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-600">Critical (&lt;20%)</span>
-                        <span class="font-semibold text-red-600">{{ stats.battery_critical }}</span>
-                    </div>
+                <ul class="border-t max-h-[460px] overflow-y-auto" style="border-color:var(--line-soft)" x-show="alerts.length">
+                    <template x-for="al in alerts" :key="al.id">
+                        <li class="fk-alert" :class="'sev-' + al.alert_type.toLowerCase()">
+                            <div class="flex items-start gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-semibold leading-snug" x-text="al.condition"></p>
+                                    <p class="fk-mono text-[11px] fk-muted-2 mt-1">
+                                        <span x-text="al.device_id"></span><span x-show="al.name" x-text="' · ' + al.name"></span><span x-text="' · ' + al.since + ' ago'"></span>
+                                    </p>
+                                </div>
+                                <button class="fk-btn fk-btn-ghost fk-btn-sm" @click="resolve(al)" :disabled="al.busy">Resolve</button>
+                            </div>
+                        </li>
+                    </template>
+                </ul>
+                <div class="px-5 pb-8 pt-4 text-center border-t" style="border-color:var(--line-soft)" x-show="!alerts.length" x-cloak>
+                    <span class="inline-flex w-10 h-10 rounded-full items-center justify-center" style="background:var(--brand-tint);color:var(--brand)">{{ icon('check', 'w-5 h-5') }}</span>
+                    <p class="font-semibold mt-3">All clear. Nice work, team.</p>
                 </div>
-            </div>
-        </div>
+            </section>
+        </aside>
     </div>
-
-    <!-- Mini Map -->
-    {% if locations %}
-    <div class="mt-6 bg-white rounded-lg shadow-lg">
-        <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-            <h2 class="text-xl font-semibold text-gray-900">📍 Animal Locations</h2>
-            <a href="/dashboard/map" class="text-sm text-blue-600 hover:text-blue-800">View Full Map →</a>
-        </div>
-        <div class="p-6">
-            <div id="miniMap" style="height: 400px; border-radius: 8px;"></div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
 <script>
-    // Store locations data from Jinja2 template
-    var dashboardLocations = {{ locations | tojson | safe }};
+    var FK_ANIMALS = {{ o.animals | tojson }};
+    var FK_ALERTS = {{ o.alerts | tojson }};
 
-    function dashboard() {
+    function overview() {
         return {
-            map: null,
+            animals: FK_ANIMALS.map(function (a) { return Object.assign({ handled: false, busy: false }, a); }),
+            alerts: FK_ALERTS.map(function (a) { return Object.assign({ busy: false }, a); }),
+            tab: 'all',
+            query: '',
+            tabs: [
+                { id: 'all', label: 'All' },
+                { id: 'critical', label: 'Needs help' },
+                { id: 'watch', label: 'Watch' },
+                { id: 'healthy', label: 'Healthy' }
+            ],
 
-            init() {
-                this.initMap();
-                this.listenWebSocket();
-            },
-
-            initMap() {
-                var locations = dashboardLocations;
-
-                if (!locations || locations.length === 0) return;
-
-                // Check if map is already initialized to prevent errors
-                var container = document.getElementById('miniMap');
-                if (container && container._leaflet_id) {
-                    return; // Map already exists
-                }
-
-                var firstLoc = locations[0];
-                this.map = L.map('miniMap').setView([firstLoc.latitude, firstLoc.longitude], 13);
-
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap'
-                }).addTo(this.map);
-
+            init: function () {
                 var self = this;
-                // Add markers
-                locations.forEach(function (loc) {
-                    if (loc.latitude && loc.longitude) {
-                        var color = self.getMarkerColor(loc);
-                        var marker = L.circleMarker([loc.latitude, loc.longitude], {
-                            color: color,
-                            fillColor: color,
-                            fillOpacity: 0.7,
-                            radius: 10
-                        }).addTo(self.map);
-
-                        marker.bindPopup(
-                            '<b>' + loc.device_id + '</b><br>' +
-                            'Temp: ' + loc.temperature + '°C<br>' +
-                            'HR: ' + loc.heart_rate + ' BPM<br>' +
-                            'Battery: ' + loc.battery + '%'
-                        );
-                    }
+                window.addEventListener('ws-message', function (e) {
+                    if (e.detail && e.detail.type === 'new_alert') setTimeout(function () { location.reload(); }, 1500);
                 });
+            },
 
-                // Fit bounds
-                var bounds = locations
-                    .filter(function (l) { return l.latitude && l.longitude; })
-                    .map(function (l) { return [l.latitude, l.longitude]; });
-                if (bounds.length > 0) {
-                    this.map.fitBounds(bounds, { padding: [50, 50] });
+            get greeting() {
+                var h = new Date().getHours();
+                return h < 12 ? 'Good morning.' : h < 17 ? 'Good afternoon.' : 'Good evening.';
+            },
+            get urgent() { return this.animals.filter(function (a) { return a.status === 'critical' || a.handled; }); },
+            get waiting() { return this.animals.filter(function (a) { return a.status === 'critical'; }).length; },
+            get attention() { return this.animals.filter(function (a) { return a.status === 'critical' || a.status === 'watch'; }).length; },
+            get healthyPct() {
+                if (!this.animals.length) return 0;
+                var n = this.animals.filter(function (a) { return a.status === 'healthy'; }).length;
+                return Math.round(100 * n / this.animals.length);
+            },
+            get boardRows() {
+                var q = this.query.trim().toLowerCase(), tab = this.tab;
+                return this.animals.filter(function (a) {
+                    if (tab === 'critical' && a.status !== 'critical') return false;
+                    if (tab === 'watch' && a.status !== 'watch' && a.status !== 'recovering') return false;
+                    if (tab === 'healthy' && a.status !== 'healthy') return false;
+                    if (!q) return true;
+                    return [a.device_id, a.name, a.breed, a.farm, a.area, a.condition].join(' ').toLowerCase().indexOf(q) !== -1;
+                });
+            },
+            countFor: function (id) {
+                if (id === 'all') return this.animals.length;
+                return this.animals.filter(function (a) {
+                    return id === 'watch' ? (a.status === 'watch' || a.status === 'recovering') : a.status === id;
+                }).length;
+            },
+
+            statusLabel: function (s) { return { critical: 'Needs help', watch: 'Watch', recovering: 'Being checked', healthy: 'Healthy' }[s]; },
+            tagClass: function (s) { return { critical: 'fk-tag-emerg', watch: 'fk-tag-prog', recovering: 'fk-tag-recov', healthy: 'fk-tag-done' }[s]; },
+            dotClass: function (s) { return { critical: 'fk-dot-emerg', watch: 'fk-dot-prog', recovering: 'fk-dot-recov', healthy: 'fk-dot-done' }[s]; },
+            firstName: function (n) {
+                var first = (n || '').split(' ')[0];
+                return !first || /^(farm|manager|owner)$/i.test(first) ? 'farm' : first;
+            },
+
+            onKey: function (e) {
+                var tag = (e.target.tagName || '').toLowerCase();
+                if (e.key === '/' && tag !== 'input' && tag !== 'textarea') {
+                    e.preventDefault();
+                    this.$refs.search.focus();
                 }
             },
 
-            getMarkerColor: function (loc) {
-                if (loc.temperature > 39.5 || loc.heart_rate > 80) return '#EF4444';
-                if (loc.temperature > 39.0 || loc.heart_rate > 75) return '#F59E0B';
-                return '#10B981';
+            postResolve: function (id) {
+                return fetch('/api/alerts/' + id + '/resolve', { method: 'POST' }).then(function (r) {
+                    if (!r.ok) throw new Error('resolve failed');
+                });
             },
 
-            listenWebSocket: function () {
-                window.addEventListener('ws-message', function (event) {
-                    var data = event.detail;
-                    if (data.type === 'new_alert') {
-                        setTimeout(function () { location.reload(); }, 2000);
+            // Mark checked: resolve the animal's critical alerts, keep it on the board as "Being checked"
+            handle: function (a) {
+                var self = this;
+                var criticalIds = this.alerts.filter(function (al) {
+                    return al.device_id === a.device_id && al.alert_type === 'CRITICAL';
+                }).map(function (al) { return al.id; });
+                a.busy = true;
+                Promise.all(criticalIds.map(this.postResolve)).then(function () {
+                    a.handled = true;
+                    a.status = 'recovering';
+                    self.alerts = self.alerts.filter(function (al) { return criticalIds.indexOf(al.id) === -1; });
+                    if (window.fkRefreshAlertCount) window.fkRefreshAlertCount();
+                }).catch(function () {
+                    alertFallback(a.device_id);
+                }).finally(function () { a.busy = false; });
+            },
+
+            resolve: function (al) {
+                var self = this;
+                al.busy = true;
+                this.postResolve(al.id).then(function () {
+                    self.alerts = self.alerts.filter(function (x) { return x.id !== al.id; });
+                    // Recompute the animal's status from what's still open
+                    var animal = self.animals.find(function (a) { return a.device_id === al.device_id; });
+                    if (animal) {
+                        var left = self.alerts.filter(function (x) { return x.device_id === animal.device_id; });
+                        var types = left.map(function (x) { return x.alert_type; });
+                        animal.status = types.indexOf('CRITICAL') !== -1 ? 'critical'
+                            : types.indexOf('WARNING') !== -1 ? 'watch'
+                                : animal.handled || types.length ? 'recovering' : 'healthy';
+                        if (animal.status === 'healthy') animal.condition = 'Vitals normal';
                     }
-                });
+                    if (window.fkRefreshAlertCount) window.fkRefreshAlertCount();
+                }).catch(function () { al.busy = false; });
             }
         };
     }
 
-    async function resolveAlert(alertId) {
-        try {
-            var response = await fetch('/api/alerts/' + alertId + '/resolve', {
-                method: 'POST'
-            });
-            if (response.ok) {
-                location.reload();
-            }
-        } catch (error) {
-            console.error('Error resolving alert:', error);
-        }
+    function alertFallback(id) {
+        console.error('Could not update alerts for ' + id);
     }
+
+    (function () {
+        fetch('/settings/weather/api/current').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+            var w = d && d.weather;
+            if (w && typeof w.temperature === 'number') {
+                document.getElementById('hdr-weather').textContent = ' · ' + w.temperature.toFixed(0) + '°C';
+            }
+        }).catch(function () { });
+    })();
 </script>
+{% endif %}
 {% endblock %}

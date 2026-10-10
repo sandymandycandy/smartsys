@@ -1,0 +1,68 @@
+{# Line icons (24px grid, stroke = currentColor). Usage: {{ icon('map') }} #}
+{% macro icon(name, cls='') -%}
+<svg class="{{ cls }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == 'overview' -%}
+<path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>
+{%- elif name == 'animals' -%}
+<path d="M5 9c0-2 1.5-4 4-4h6c2.5 0 4 2 4 4v5a5 5 0 0 1-5 5h-4a5 5 0 0 1-5-5z"/><path d="M5 9 2 7M19 9l3-2"/><circle cx="9.5" cy="11" r=".6" fill="currentColor"/><circle cx="14.5" cy="11" r=".6" fill="currentColor"/><path d="M10 16h4"/>
+{%- elif name == 'map' -%}
+<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>
+{%- elif name == 'alert' -%}
+<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+{%- elif name == 'farm' -%}
+<path d="M3 21V10l9-6 9 6v11"/><path d="M9 21v-6h6v6"/><path d="M3 21h18"/>
+{%- elif name == 'chart' -%}
+<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>
+{%- elif name == 'spark' -%}
+<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/>
+{%- elif name == 'heat' -%}
+<path d="M12 22a7 7 0 0 0 7-7c0-4-3-6-4-10-2 2-3 4-3 6-1-1-2-2-2-4-2 2-5 5-5 8a7 7 0 0 0 7 7z"/>
+{%- elif name == 'weather' -%}
+<path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9z"/>
+{%- elif name == 'fence' -%}
+<path d="M4 4v17M10 4v17M16 4v17M22 4v17M2 9h22M2 16h22"/>
+{%- elif name == 'bell-ring' -%}
+<path d="M4 4h16v12H5.2L4 17.2z"/><path d="M8 9h8M8 12h5"/>
+{%- elif name == 'sliders' -%}
+<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>
+{%- elif name == 'user' -%}
+<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>
+{%- elif name == 'users' -%}
+<circle cx="9" cy="8" r="4"/><path d="M1 21a8 8 0 0 1 16 0M17 4a4 4 0 0 1 0 8M23 21a8 8 0 0 0-5-7.4"/>
+{%- elif name == 'logout' -%}
+<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+{%- elif name == 'docs' -%}
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>
+{%- elif name == 'phone' -%}
+<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>
+{%- elif name == 'search' -%}
+<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+{%- elif name == 'plus' -%}
+<path d="M12 5v14M5 12h14"/>
+{%- elif name == 'menu' -%}
+<path d="M4 6h16M4 12h16M4 18h16"/>
+{%- elif name == 'close' -%}
+<path d="M18 6 6 18M6 6l12 12"/>
+{%- elif name == 'check' -%}
+<path d="M20 6 9 17l-5-5"/>
+{%- elif name == 'arrow-right' -%}
+<path d="M5 12h14M13 6l6 6-6 6"/>
+{%- elif name == 'pin' -%}
+<path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>
+{%- elif name == 'thermo' -%}
+<path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z"/>
+{%- elif name == 'heart' -%}
+<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/>
+{%- elif name == 'battery' -%}
+<rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2"/>
+{%- elif name == 'signal' -%}
+<path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/>
+{%- elif name == 'more' -%}
+<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>
+{%- elif name == 'message' -%}
+<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/>
+{%- elif name == 'milk' -%}
+<path d="M8 2h8M9 2v3l-3 4v13h12V9l-3-4V2"/><path d="M6 13h12"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}

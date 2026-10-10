@@ -1,408 +1,177 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}Notification Settings - Smart Pastoralism{% endblock %}
+{% block title %}Notifications · PawTrack{% endblock %}
+
+{% macro gets(r) -%}
+{%- set parts = [] -%}
+{%- if r.notify_critical %}{% set _ = parts.append('critical') %}{% endif -%}
+{%- if r.notify_warning %}{% set _ = parts.append('warnings') %}{% endif -%}
+{%- if r.notify_geofence %}{% set _ = parts.append('geofence') %}{% endif -%}
+{{ ('Gets ' ~ parts|join(', ')) if parts else 'Gets nothing yet' }}
+{%- endmacro %}
+
+{% macro kinds(prefix, warning_default) %}
+<fieldset>
+    <legend class="fk-label">Send them</legend>
+    <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        {% for key, label, default in [('notify_critical', 'Critical alerts', true), ('notify_warning', 'Warnings', warning_default), ('notify_geofence', 'Geofence breaks', true)] %}
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="hidden" name="{{ key }}" value="false">
+            <input type="checkbox" name="{{ key }}" value="true" {{ 'checked' if default }} class="w-4 h-4" style="accent-color:var(--brand)">
+            {{ label }}
+        </label>
+        {% endfor %}
+    </div>
+</fieldset>
+{% endmacro %}
 
 {% block page_content %}
-<div x-data="notificationSettings()" x-init="init()">
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">📬 Notification Settings</h1>
-        <p class="mt-2 text-sm text-gray-600">Configure email and SMS alerts for health events</p>
-    </div>
+{% set msg = request.query_params.get('success') %}
+{% set err = request.query_params.get('error') %}
+{% set sent = notification_log|selectattr('status', 'equalto', 'sent')|list|length %}
+{% set failed = notification_log|selectattr('status', 'equalto', 'failed')|list|length %}
 
-    <!-- Success/Error Messages -->
-    <div x-show="successMessage" x-transition class="bg-green-50 border-l-4 border-green-500 p-4 mb-6 rounded-lg">
-        <div class="flex items-center">
-            <span class="text-2xl mr-3">✅</span>
-            <p class="text-green-700" x-text="successMessage"></p>
-        </div>
-    </div>
+<header class="mb-7">
+    <p class="fk-eyebrow">System</p>
+    <h1 class="fk-h1 mt-2">Who hears about it</h1>
+    <p class="fk-muted mt-2 max-w-2xl">When an animal crosses a threshold or leaves a geofence, these people get an email or a text.</p>
+</header>
 
-    <div x-show="errorMessage" x-transition class="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-lg">
-        <div class="flex items-center">
-            <span class="text-2xl mr-3">❌</span>
-            <p class="text-red-700" x-text="errorMessage"></p>
-        </div>
-    </div>
+{% if msg %}
+<p class="fk-notice fk-notice-ok mb-6" role="status">
+    {{ {'email_added': 'Email added. They will get the next alert.', 'phone_added': 'Phone number added.', 'deleted': 'Removed.'}.get(msg, 'Saved.') }}
+</p>
+{% endif %}
+{% if err %}
+<p class="fk-notice fk-notice-err mb-6" role="alert">
+    {{ {'email_failed': "Couldn't add that email. It may already be on the list.", 'phone_failed': "Couldn't add that number. It may already be on the list."}.get(err, 'Something went wrong. Try again.') }}
+</p>
+{% endif %}
 
-    <!-- Configuration Tabs -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <!-- Email Configuration -->
-        <div class="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-lg font-semibold mb-4 flex items-center">
-                <span class="text-2xl mr-2">📧</span>
-                Email Notifications
-            </h3>
-
-            <form @submit.prevent="saveEmailSettings()" class="space-y-4">
-                <!-- Email Enable Toggle -->
-                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                        <p class="font-medium text-gray-900">Enable Email Notifications</p>
-                        <p class="text-sm text-gray-600">Receive alerts via email</p>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" x-model="emailSettings.enabled" class="sr-only peer">
-                        <div
-                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600">
-                        </div>
-                    </label>
-                </div>
-
-                <!-- Email Address -->
+<div class="grid gap-7 xl:grid-cols-[minmax(0,1fr)_380px]" x-data="notifyPage()">
+    <div class="space-y-7 min-w-0">
+        <!-- Email -->
+        <section class="fk-card" aria-labelledby="email-h">
+            <div class="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                    <input type="email" x-model="emailSettings.email" placeholder="your-email@example.com"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <h2 id="email-h" class="fk-h2">Email</h2>
+                    <p class="text-sm fk-muted-2 mt-1">{{ email_recipients|length }} recipient{{ 's' if email_recipients|length != 1 }}</p>
                 </div>
-
-                <!-- Registered Recipients List -->
-                {% if email_recipients %}
-                <div class="bg-blue-50 rounded-lg p-4">
-                    <p class="text-sm font-semibold text-blue-900 mb-2">📧 Registered Recipients:</p>
-                    <div class="space-y-2">
-                        {% for recipient in email_recipients %}
-                        <div class="flex items-center justify-between bg-white p-3 rounded shadow-sm">
-                            <div class="flex items-center flex-1">
-                                <span class="text-green-600 mr-2">✓</span>
-                                <div>
-                                    <span class="text-sm font-medium text-gray-900">{{ recipient.email }}</span>
-                                    {% if recipient.name %}
-                                    <span class="text-xs text-gray-500 ml-2">({{ recipient.name }})</span>
-                                    {% endif %}
-                                    <div class="flex items-center gap-1 mt-1">
-                                        {% if recipient.notify_critical %}<span
-                                            class="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">Critical</span>{%
-                                        endif %}
-                                        {% if recipient.notify_warning %}<span
-                                            class="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded">Warning</span>{%
-                                        endif %}
-                                        {% if recipient.notify_geofence %}<span
-                                            class="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">Geofence</span>{%
-                                        endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            <form method="POST" action="/settings/notifications/email/{{ recipient.id }}/delete"
-                                onsubmit="return confirm('Delete {{ recipient.email }}?')">
-                                <button type="submit"
-                                    class="ml-3 px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition">
-                                    🗑️ Delete
-                                </button>
-                            </form>
-                        </div>
-                        {% endfor %}
+            </div>
+            {% if email_recipients %}
+            <ul class="border-t" style="border-color:var(--line-soft)">
+                {% for r in email_recipients %}
+                <li class="flex items-center gap-3 px-5 py-3 border-b" style="border-color:var(--line-soft)">
+                    <span class="fk-avatar">{{ (r.name or r.email)[:1]|upper }}</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold truncate">{{ r.email }}{% if r.name %} <span class="font-normal fk-muted-2">· {{ r.name }}</span>{% endif %}</p>
+                        <p class="text-xs fk-muted-2">{{ gets(r) }}</p>
                     </div>
+                    <button type="button" class="fk-btn fk-btn-quiet fk-btn-sm" data-email="{{ r.email }}" @click="test($el.dataset.email)" :disabled="testing">Send test</button>
+                    <form method="post" action="/settings/notifications/email/{{ r.id }}/delete">
+                        <button type="submit" class="fk-btn fk-btn-quiet fk-btn-sm" aria-label="Remove {{ r.email }}">Remove</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            <form method="post" action="/settings/notifications/email/add" class="px-5 py-5 space-y-4 {{ 'border-t' if not email_recipients }}" style="border-color:var(--line-soft)">
+                <p class="text-sm font-semibold">Add someone</p>
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div><label class="fk-label" for="em">Email</label><input id="em" class="fk-input" type="email" name="email" required placeholder="name@farm.in"></div>
+                    <div><label class="fk-label" for="em-name">Name <span class="fk-muted-2 font-normal">(optional)</span></label><input id="em-name" class="fk-input" name="name"></div>
                 </div>
-                {% else %}
-                <div class="bg-gray-50 rounded-lg p-4 text-center">
-                    <p class="text-sm text-gray-600">No email recipients registered yet</p>
-                    <p class="text-xs text-gray-500 mt-1">Add an email above and click "Save Email Settings"</p>
-                </div>
-                {% endif %}
-
-                <!-- Alert Types -->
-                <div class="space-y-2">
-                    <p class="font-medium text-gray-700">Alert Types to Receive:</p>
-
-                    <label
-                        class="flex items-center p-3 bg-red-50 rounded-lg cursor-pointer hover:bg-red-100 transition">
-                        <input type="checkbox" x-model="emailSettings.critical_alerts"
-                            class="w-5 h-5 text-red-600 rounded focus:ring-red-500">
-                        <div class="ml-3">
-                            <p class="font-medium text-red-900">Critical Alerts</p>
-                            <p class="text-sm text-red-700">High temperature, critical heart rate</p>
-                        </div>
-                    </label>
-
-                    <label
-                        class="flex items-center p-3 bg-yellow-50 rounded-lg cursor-pointer hover:bg-yellow-100 transition">
-                        <input type="checkbox" x-model="emailSettings.warning_alerts"
-                            class="w-5 h-5 text-yellow-600 rounded focus:ring-yellow-500">
-                        <div class="ml-3">
-                            <p class="font-medium text-yellow-900">Warning Alerts</p>
-                            <p class="text-sm text-yellow-700">Elevated readings, minor concerns</p>
-                        </div>
-                    </label>
-
-                    <label
-                        class="flex items-center p-3 bg-purple-50 rounded-lg cursor-pointer hover:bg-purple-100 transition">
-                        <input type="checkbox" x-model="emailSettings.geofence_alerts"
-                            class="w-5 h-5 text-purple-600 rounded-focus:ring-purple-500">
-                        <div class="ml-3">
-                            <p class="font-medium text-purple-900">Geofence Alerts</p>
-                            <p class="text-sm text-purple-700">Animal leaves designated area</p>
-                        </div>
-                    </label>
-
-                    <label
-                        class="flex items-center p-3 bg-orange-50 rounded-lg cursor-pointer hover:bg-orange-100 transition">
-                        <input type="checkbox" x-model="emailSettings.battery_alerts"
-                            class="w-5 h-5 text-orange-600 rounded focus:ring-orange-500">
-                        <div class="ml-3">
-                            <p class="font-medium text-orange-900">Battery Alerts</p>
-                            <p class="text-sm text-orange-700">Low device battery warnings</p>
-                        </div>
-                    </label>
-                </div>
-
-                <div class="flex gap-2">
-                    <button type="submit"
-                        class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                        💾 Save Email Settings
-                    </button>
-                    <button type="button" @click="testEmail()"
-                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                        📧 Send Test
-                    </button>
-                </div>
+                {{ kinds('em', true) }}
+                <button type="submit" class="fk-btn fk-btn-primary">{{ icon('plus', 'w-[18px] h-[18px]') }}Add email</button>
             </form>
-        </div>
+        </section>
 
-        <!-- SMS Configuration -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-lg font-semibold mb-4 flex items-center">
-                <span class="text-2xl mr-2">📱</span>
-                SMS Notifications
-            </h3>
-
-            <form @submit.prevent="saveSMSSettings()" class="space-y-4">
-                <!-- SMS Enable Toggle -->
-                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                        <p class="font-medium text-gray-900">Enable SMS</p>
-                        <p class="text-xs text-gray-600">Text messages</p>
+        <!-- SMS -->
+        <section class="fk-card" aria-labelledby="sms-h">
+            <div class="px-5 pt-5 pb-3">
+                <h2 id="sms-h" class="fk-h2">Text messages</h2>
+                <p class="text-sm fk-muted-2 mt-1">Sent through Twilio. Set <code class="fk-kbd">TWILIO_*</code> in the server's <code class="fk-kbd">.env</code> to switch it on.</p>
+            </div>
+            {% if phone_recipients %}
+            <ul class="border-t" style="border-color:var(--line-soft)">
+                {% for r in phone_recipients %}
+                <li class="flex items-center gap-3 px-5 py-3 border-b" style="border-color:var(--line-soft)">
+                    <span class="fk-avatar">{{ icon('phone', 'w-4 h-4') }}</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold fk-mono">{{ r.phone }}{% if r.name %} <span class="font-normal fk-muted-2" style="font-family:var(--font-ui)">· {{ r.name }}</span>{% endif %}</p>
+                        <p class="text-xs fk-muted-2">{{ gets(r) }}</p>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" x-model="smsSettings.enabled" class="sr-only peer">
-                        <div
-                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600">
-                        </div>
-                    </label>
+                    <form method="post" action="/settings/notifications/phone/{{ r.id }}/delete">
+                        <button type="submit" class="fk-btn fk-btn-quiet fk-btn-sm" aria-label="Remove {{ r.phone }}">Remove</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            <form method="post" action="/settings/notifications/phone/add" class="px-5 py-5 space-y-4 {{ 'border-t' if not phone_recipients }}" style="border-color:var(--line-soft)">
+                <p class="text-sm font-semibold">Add a phone</p>
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div><label class="fk-label" for="ph">Phone</label><input id="ph" class="fk-input fk-mono" type="tel" name="phone" required placeholder="+91 98400 10100"></div>
+                    <div><label class="fk-label" for="ph-name">Name <span class="fk-muted-2 font-normal">(optional)</span></label><input id="ph-name" class="fk-input" name="name"></div>
                 </div>
-
-                <!-- Phone Number -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                    <input type="tel" x-model="smsSettings.phone" placeholder="+1234567890"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                    <p class="text-xs text-gray-500 mt-1">Format: +[country][number]</p>
-                </div>
-
-                <!-- SMS Alert Types -->
-                <div class="space-y-2">
-                    <p class="text-sm font-medium text-gray-700">Send SMS for:</p>
-
-                    <label class="flex items-center cursor-pointer">
-                        <input type="checkbox" x-model="smsSettings.critical_only"
-                            class="w-4 h-4 text-purple-600 rounded focus:ring-purple-500">
-                        <span class="ml-2 text-sm text-gray-700">Critical alerts only</span>
-                    </label>
-
-                    <label class="flex items-center cursor-pointer">
-                        <input type="checkbox" x-model="smsSettings.geofence_alerts"
-                            class="w-4 h-4 text-purple-600 rounded focus:ring-purple-500">
-                        <span class="ml-2 text-sm text-gray-700">Geofence violations</span>
-                    </label>
-                </div>
-
-                <!-- Twilio Setup Guide -->
-                <div class="bg-purple-50 p-3 rounded-lg">
-                    <p class="text-xs font-semibold text-purple-900 mb-1">📘 Twilio Setup</p>
-                    <p class="text-xs text-purple-700">Configure in .env file</p>
-                </div>
-
-                <div class="space-y-2">
-                    <button type="submit"
-                        class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                        💾 Save SMS Settings
-                    </button>
-                    <button type="button" @click="testSMS()"
-                        class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                        📱 Send Test
-                    </button>
-                </div>
+                {{ kinds('ph', false) }}
+                <button type="submit" class="fk-btn fk-btn-primary">{{ icon('plus', 'w-[18px] h-[18px]') }}Add phone</button>
             </form>
-        </div>
+        </section>
+
+        <p class="fk-notice" :class="testOk ? 'fk-notice-ok' : 'fk-notice-err'" x-show="testMsg" x-text="testMsg" x-cloak role="status"></p>
     </div>
 
-    <!-- Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-blue-100 text-sm font-medium">Total Sent</p>
-                    <p class="text-3xl font-bold mt-1" x-text="stats.total_sent"></p>
-                </div>
-                <span class="text-4xl opacity-80">📨</span>
+    <!-- Delivery log -->
+    <aside class="min-w-0">
+        <section class="fk-card" aria-labelledby="log-h">
+            <div class="px-5 pt-5 pb-3">
+                <h2 id="log-h" class="fk-h2">What went out</h2>
+                <p class="text-sm fk-muted-2 mt-1">Last {{ notification_log|length }} · {{ sent }} delivered{% if failed %}, <span style="color:var(--emerg-text)">{{ failed }} failed</span>{% endif %}</p>
             </div>
-        </div>
-
-        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-green-100 text-sm font-medium">Successful</p>
-                    <p class="text-3xl font-bold mt-1" x-text="stats.successful"></p>
-                </div>
-                <span class="text-4xl opacity-80">✅</span>
-            </div>
-        </div>
-
-        <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-red-100 text-sm font-medium">Failed</p>
-                    <p class="text-3xl font-bold mt-1" x-text="stats.failed"></p>
-                </div>
-                <span class="text-4xl opacity-80">❌</span>
-            </div>
-        </div>
-
-        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-purple-100 text-sm font-medium">Last 24h</p>
-                    <p class="text-3xl font-bold mt-1" x-text="stats.last_24h"></p>
-                </div>
-                <span class="text-4xl opacity-80">🕐</span>
-            </div>
-        </div>
-    </div>
+            {% if notification_log %}
+            <ul class="border-t max-h-[640px] overflow-y-auto" style="border-color:var(--line-soft)">
+                {% for n in notification_log %}
+                <li class="fk-alert {{ 'sev-critical' if n.status == 'failed' else ('sev-info' if n.status == 'sent' else 'sev-warning') }}">
+                    <div class="flex items-start justify-between gap-2">
+                        <p class="text-sm font-semibold min-w-0 truncate">{{ n.subject or n.message or 'Notification' }}</p>
+                        {% if n.status == 'sent' %}<span class="fk-tag fk-tag-done">Sent</span>
+                        {% elif n.status == 'failed' %}<span class="fk-tag fk-tag-emerg">Failed</span>
+                        {% else %}<span class="fk-tag fk-tag-prog">{{ (n.status or 'pending')|capitalize }}</span>{% endif %}
+                    </div>
+                    <p class="fk-mono text-[11px] fk-muted-2 mt-1 truncate">{{ n.notification_type }} · {{ n.recipient }} · {{ (n.sent_at or n.created_at or '')[:16]|replace('T', ' ') }}</p>
+                    {% if n.error_message %}<p class="text-xs mt-1" style="color:var(--emerg-text)">{{ n.error_message[:140] }}</p>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="px-5 pb-6 fk-muted">Nothing sent yet. The first alert after you add someone will show up here.</p>
+            {% endif %}
+        </section>
+    </aside>
 </div>
 
 <script>
-    function notificationSettings() {
+    function notifyPage() {
         return {
-            successMessage: '',
-            errorMessage: '',
-
-            emailSettings: {
-                enabled: true,
-                email: '',
-                critical_alerts: true,
-                warning_alerts: true,
-                geofence_alerts: true,
-                battery_alerts: true
-            },
-
-            smsSettings: {
-                enabled: false,
-                phone: '',
-                critical_only: true,
-                geofence_alerts: true
-            },
-
-            stats: {
-                total_sent: 0,
-                successful: 0,
-                failed: 0,
-                last_24h: 0
-            },
-
-            async init() {
-                await this.loadSettings();
-            },
-
-            async loadSettings() {
-                const saved = localStorage.getItem('notificationSettings');
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    this.emailSettings = data.email || this.emailSettings;
-                    this.smsSettings = data.sms || this.smsSettings;
-                }
-            },
-
-            async saveEmailSettings() {
-                if (this.emailSettings.enabled && !this.emailSettings.email) {
-                    this.showError('Please enter an email address');
-                    return;
-                }
-
+            testing: false,
+            testMsg: '',
+            testOk: true,
+            test: async function (email) {
+                this.testing = true;
+                var fd = new FormData();
+                fd.append('email', email);
                 try {
-                    // Create form data
-                    const formData = new FormData();
-                    formData.append('email', this.emailSettings.email);
-                    formData.append('name', ''); // Optional name field
-                    formData.append('notify_critical', this.emailSettings.critical_alerts ? '1' : '0');
-                    formData.append('notify_warning', this.emailSettings.warning_alerts ? '1' : '0');
-                    formData.append('notify_geofence', this.emailSettings.geofence_alerts ? '1' : '0');
-
-                    // Send to backend
-                    const response = await fetch('/settings/notifications/email/add', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (response.ok) {
-                        this.showSuccess('✅ Email registered successfully! Refreshing page...');
-                        // Refresh page after 1 second to show the new email in the list
-                        setTimeout(() => window.location.reload(), 1000);
-                    } else {
-                        this.showError('Failed to register email. Please try again.');
-                    }
-                } catch (error) {
-                    this.showError('Error: ' + error.message);
+                    var r = await fetch('/settings/notifications/email/test', { method: 'POST', body: fd });
+                    var res = await r.json();
+                    this.testOk = !!res.success;
+                    this.testMsg = res.success ? 'Test email sent to ' + email + '. Check the inbox.' : 'The test email failed: ' + (res.message || 'unknown error');
+                } catch (e) {
+                    this.testOk = false;
+                    this.testMsg = 'The test email failed: ' + e.message;
                 }
-            },
-
-            async saveSMSSettings() {
-                if (this.smsSettings.enabled && !this.smsSettings.phone) {
-                    this.showError('Please enter a phone number');
-                    return;
-                }
-
-                const settings = {
-                    email: this.emailSettings,
-                    sms: this.smsSettings
-                };
-                localStorage.setItem('notificationSettings', JSON.stringify(settings));
-                this.showSuccess('SMS settings saved!');
-            },
-
-            async testEmail() {
-                if (!this.emailSettings.email) {
-                    this.showError('Please enter an email address first');
-                    return;
-                }
-
-                try {
-                    const formData = new FormData();
-                    formData.append('email', this.emailSettings.email);
-
-                    const response = await fetch('/settings/notifications/email/test', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    const result = await response.json();
-
-                    if (result.success) {
-                        this.showSuccess('📧 Test email sent to ' + this.emailSettings.email + '! Check your inbox.');
-                    } else {
-                        this.showError('Failed to send test email: ' + result.message);
-                    }
-                } catch (error) {
-                    this.showError('Error sending test email: ' + error.message);
-                }
-            },
-
-            async testSMS() {
-                if (!this.smsSettings.phone) {
-                    this.showError('Please enter a phone number first');
-                    return;
-                }
-                this.showSuccess('Test SMS sent to ' + this.smsSettings.phone);
-            },
-
-            showSuccess(msg) {
-                this.successMessage = msg;
-                this.errorMessage = '';
-                setTimeout(() => this.successMessage = '', 5000);
-            },
-
-            showError(msg) {
-                this.errorMessage = msg;
-                this.successMessage = '';
-                setTimeout(() => this.errorMessage = '', 5000);
+                this.testing = false;
             }
         };
     }

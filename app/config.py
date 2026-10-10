@@ -5,7 +5,7 @@ load_dotenv()
 
 class Settings:
     # Application
-    APP_NAME: str = os.getenv("APP_NAME", "Smart Pastoralism System")
+    APP_NAME: str = os.getenv("APP_NAME", "PawTrack")
     DEBUG: bool = os.getenv("DEBUG", "True") == "True"
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
     
@@ -44,7 +44,7 @@ class Settings:
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "")
-    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Smart Pastoralism Alerts")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "PawTrack Alerts")
     NOTIFICATION_EMAILS: str = os.getenv("NOTIFICATION_EMAILS", "")  # Comma-separated
     
     # SMS Notifications (Twilio)

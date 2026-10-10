@@ -1,151 +1,110 @@
-<aside id="sidebar" class="w-64 bg-white shadow-lg overflow-y-auto transition-transform duration-300 ease-in-out 
-              fixed lg:static inset-y-0 left-0 z-40 transform -translate-x-full lg:translate-x-0"
-    x-data="{ open: false }"
-    :class="{ '-translate-x-full': !$store.sidebar?.open, 'translate-x-0': $store.sidebar?.open }"
-    @sidebar-toggle.window="$store.sidebar = { open: !$store.sidebar?.open }">
+{% from 'components/icons.html' import icon %}
+{% set path = request.url.path.rstrip('/') or '/' %}
+{% macro nav(href, label, ico, exact=false, count_id=none) -%}
+{%- set h = href.rstrip('/') -%}
+{%- set active = (path == h) if exact else (path == h or path.startswith(h ~ '/')) -%}
+<a href="{{ href }}" class="fk-nav-link{% if active %} is-active{% endif %}" {% if active %}aria-current="page"{% endif %}>
+    {{ icon(ico) }}<span>{{ label }}</span>
+    {%- if count_id %}<span id="{{ count_id }}" class="fk-nav-count" hidden></span>{% endif %}
+</a>
+{%- endmacro %}
 
-    <!-- Close button for mobile -->
-    <div class="lg:hidden flex justify-end p-2">
-        <button @click="$dispatch('sidebar-toggle')" class="p-2 text-gray-600 hover:text-gray-900">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
+<aside id="sidebar"
+    class="fk-sidebar fixed lg:static inset-y-0 left-0 z-50 flex flex-col h-full -translate-x-full lg:translate-x-0 transition-transform duration-200"
+    :class="{ '-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen }">
+
+    <!-- Brand -->
+    <div class="flex items-center justify-between px-5 pt-5 pb-2">
+        <a href="/dashboard" class="flex items-center gap-2.5">
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg" style="background:var(--brand);color:#fff">
+                {{ icon('animals', 'w-5 h-5') }}
+            </span>
+            <span class="fk-display text-[19px] font-extrabold tracking-tight">PawTrack</span>
+        </a>
+        <button class="lg:hidden fk-btn fk-btn-quiet fk-btn-sm" @click="sidebarOpen = false" aria-label="Close menu">
+            {{ icon('close', 'w-5 h-5') }}
         </button>
     </div>
 
-    <nav class="mt-2 lg:mt-4 px-2 lg:px-4 pb-4">
-        <!-- Main Navigation -->
-        <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 hidden lg:block">Main</p>
-
-        <a href="/dashboard"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">📊</span>
-            <span class="font-medium">Dashboard</span>
-        </a>
-
-        <a href="/dashboard/map"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">📍</span>
-            <span class="font-medium">Live Map</span>
-        </a>
-
-        <a href="/dashboard/animals"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">🐮</span>
-            <span class="font-medium">Animals</span>
-        </a>
-
-        <a href="/farms"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">🌾</span>
-            <span class="font-medium">Farms</span>
-        </a>
-
-        <a href="/dashboard/alerts"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">🔔</span>
-            <span class="font-medium">Alerts</span>
-        </a>
-
-        <a href="/dashboard/analytics"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">📈</span>
-            <span class="font-medium">Analytics</span>
-        </a>
-
-        <a href="/dashboard/ml-insights"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-purple-50 hover:text-purple-600 mb-1 transition">
-            <span class="text-xl mr-3">🤖</span>
-            <span class="font-medium">ML Insights</span>
-        </a>
-
-        <hr class="my-3">
-
-        <!-- Milk Production -->
-        <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Production</p>
-
-        <a href="/milk/dashboard"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-green-50 hover:text-green-600 mb-1 transition">
-            <span class="text-xl mr-3">🥛</span>
-            <span class="font-medium">Milk Dashboard</span>
-        </a>
-
-        <a href="/milk/record"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-green-50 hover:text-green-600 mb-1 transition">
-            <span class="text-xl mr-3">📝</span>
-            <span class="font-medium">Record Milk</span>
-        </a>
-
-        <a href="/milk/analytics"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-green-50 hover:text-green-600 mb-1 transition">
-            <span class="text-xl mr-3">📊</span>
-            <span class="font-medium">Milk Analytics</span>
-        </a>
-
-        <hr class="my-3">
-
-        <!-- Visualization -->
-        <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Visualization</p>
-
-        <a href="/settings/heatmap"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-orange-50 hover:text-orange-600 mb-1 transition">
-            <span class="text-xl mr-3">🔥</span>
-            <span class="font-medium">Heatmap</span>
-        </a>
-
-        <a href="/settings/weather"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-cyan-50 hover:text-cyan-600 mb-1 transition">
-            <span class="text-xl mr-3">🌤️</span>
-            <span class="font-medium">Weather</span>
-        </a>
-
-        <hr class="my-3">
-
-        <!-- Settings -->
-        <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Settings</p>
-
-        <a href="/settings/geofences"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">🗺️</span>
-            <span class="font-medium">Geofencing</span>
-        </a>
-
-        <a href="/settings/notifications"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">📬</span>
-            <span class="font-medium">Notifications</span>
-        </a>
-
-        <a href="/settings/thresholds"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-purple-50 hover:text-purple-600 mb-1 transition">
-            <span class="text-xl mr-3">⚙️</span>
-            <span class="font-medium">Thresholds</span>
-        </a>
-
-        <hr class="my-3">
-
-        <!-- System -->
-        <a href="/docs" target="_blank"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-50 hover:text-gray-900 mb-1 transition">
-            <span class="text-xl mr-3">📚</span>
-            <span class="font-medium">API Docs</span>
-        </a>
-
-        <a href="/auth/profile"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-600 mb-1 transition">
-            <span class="text-xl mr-3">👤</span>
-            <span class="font-medium">Profile</span>
-        </a>
-
-        <a href="/auth/logout"
-            class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-red-50 hover:text-red-600 mb-1 transition">
-            <span class="text-xl mr-3">🚪</span>
-            <span class="font-medium">Logout</span>
-        </a>
+    <nav class="flex-1 overflow-y-auto pb-4" aria-label="Main">
+        <div class="fk-nav-group">
+            <span class="fk-eyebrow">Herd</span>
+            {{ nav('/dashboard', 'Overview', 'overview', exact=true) }}
+            {{ nav('/dashboard/animals', 'Animals', 'animals') }}
+            {{ nav('/dashboard/map', 'Live map', 'map') }}
+            {{ nav('/dashboard/alerts', 'Alerts', 'alert', count_id='nav-alert-count') }}
+            {{ nav('/farms', 'Farms', 'farm') }}
+        </div>
+        <div class="fk-nav-group">
+            <span class="fk-eyebrow">Insights</span>
+            {{ nav('/dashboard/analytics', 'Health trends', 'chart') }}
+            {{ nav('/dashboard/ml-insights', 'AI insights', 'spark') }}
+            {{ nav('/settings/heatmap', 'Grazing heatmap', 'heat') }}
+            {{ nav('/settings/weather', 'Weather', 'weather') }}
+        </div>
+        <div class="fk-nav-group">
+            <span class="fk-eyebrow">System</span>
+            {{ nav('/settings/geofences', 'Geofences', 'fence') }}
+            {{ nav('/settings/thresholds', 'Thresholds', 'sliders') }}
+            {{ nav('/settings/notifications', 'Notifications', 'bell-ring') }}
+            {{ nav('/auth/admin/users', 'Team', 'users') }}
+        </div>
     </nav>
+
+    <!-- Vet helpline: fixed above the user -->
+    <div class="px-3 pb-3">
+        <a href="tel:1962" class="block fk-card p-3.5 hover:border-[#CFC5B1]">
+            <span class="fk-eyebrow" style="color:var(--emerg-text)">Vet emergency</span>
+            <span class="flex items-center justify-between mt-1">
+                <span class="fk-display text-[26px] font-extrabold leading-none">1962</span>
+                <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg" style="background:var(--emerg-tint);color:var(--emerg)">
+                    {{ icon('phone', 'w-[18px] h-[18px]') }}
+                </span>
+            </span>
+            <span class="block text-xs fk-muted-2 mt-1.5">Mobile veterinary unit, free 24/7</span>
+        </a>
+    </div>
+
+    <!-- User -->
+    <div class="flex items-center gap-3 px-4 py-3 border-t" style="border-color:var(--line)">
+        <a href="/auth/profile" class="flex items-center gap-3 min-w-0 flex-1">
+            <span class="fk-avatar" id="sidebar-user-initial">A</span>
+            <span class="min-w-0">
+                <span class="block text-sm font-semibold truncate" id="sidebar-user-name">Admin</span>
+                <span class="block text-xs fk-muted-2 capitalize" id="sidebar-user-role">Coordinator</span>
+            </span>
+        </a>
+        <a href="/auth/logout" class="fk-btn fk-btn-quiet fk-btn-sm px-2" title="Log out" aria-label="Log out">
+            {{ icon('logout', 'w-[18px] h-[18px]') }}
+        </a>
+    </div>
 </aside>
 
 <!-- Mobile overlay -->
-<div class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden" x-show="$store.sidebar?.open"
-    @click="$dispatch('sidebar-toggle')" x-cloak>
-</div>
+<div class="fixed inset-0 z-[45] lg:hidden" style="background:rgba(31,42,31,.35)" x-show="sidebarOpen"
+    @click="sidebarOpen = false" x-cloak></div>
+
+<script>
+    (function () {
+        fetch('/auth/me').then(function (r) { return r.ok ? r.json() : null; }).then(function (u) {
+            if (!u || !u.username) return;
+            document.getElementById('sidebar-user-name').textContent = u.username;
+            document.getElementById('sidebar-user-initial').textContent = u.username.charAt(0).toUpperCase();
+            if (u.role) document.getElementById('sidebar-user-role').textContent = u.role;
+            var team = document.querySelector('#sidebar a[href="/auth/admin/users"]');
+            if (team && u.role !== 'admin') team.hidden = true;
+        }).catch(function () { });
+
+        window.fkRefreshAlertCount = function () {
+            fetch('/api/alerts/active').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+                var list = d && (d.alerts || d);
+                var n = Array.isArray(list) ? list.length : 0;
+                var el = document.getElementById('nav-alert-count');
+                if (!el) return;
+                el.textContent = n;
+                el.hidden = n === 0;
+            }).catch(function () { });
+        };
+        window.fkRefreshAlertCount();
+    })();
+</script>

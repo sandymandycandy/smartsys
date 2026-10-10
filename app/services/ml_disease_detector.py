@@ -265,7 +265,7 @@ class MLDiseaseDetector:
             cursor.execute("""
                 SELECT * FROM livestock_readings
                 WHERE device_id = ?
-                ORDER BY timestamp DESC
+                ORDER BY id DESC
                 LIMIT ?
             """, (device_id, limit))
             
@@ -861,7 +861,7 @@ class MLDiseaseDetector:
             cursor.execute("""
                 SELECT * FROM livestock_readings
                 WHERE device_id = ?
-                ORDER BY timestamp DESC
+                ORDER BY id DESC
                 LIMIT ?
             """, (device_id, limit))
             

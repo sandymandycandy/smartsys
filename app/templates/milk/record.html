@@ -1,11 +1,11 @@
 {% extends "dashboard-base.html" %}
 
-{% block title %}Record Milk Production - Smart Pastoralism{% endblock %}
+{% block title %}Record Milk Production - PawTrack{% endblock %}
 
 {% block page_content %}
 <div x-data="recordProduction" x-init="init()">
     <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">📝 Record Milk Production</h1>
+        <h1 class="text-3xl font-bold text-gray-900">Record Milk Production</h1>
         <p class="mt-2 text-sm text-gray-600">Enter milk yield data for your animals</p>
     </div>
 
@@ -55,9 +55,9 @@
                             </label>
                             <select x-model="formData.milking_session" required
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                <option value="morning">🌅 Morning</option>
-                                <option value="afternoon">☀️ Afternoon</option>
-                                <option value="evening">🌆 Evening</option>
+                                <option value="morning">Morning</option>
+                                <option value="afternoon">Afternoon</option>
+                                <option value="evening">Evening</option>
                             </select>
                         </div>
 
@@ -135,8 +135,8 @@
                         </button>
                         <button type="submit" :disabled="submitting"
                             class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span x-show="!submitting">✅ Record Production</span>
-                            <span x-show="submitting">⏳ Saving...</span>
+                            <span x-show="!submitting">Record Production</span>
+                            <span x-show="submitting">Saving...</span>
                         </button>
                     </div>
                 </form>
@@ -153,7 +153,7 @@
         <div class="space-y-6">
             <!-- Today's Summary -->
             <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
-                <h3 class="text-lg font-semibold mb-3">📊 Today's Summary</h3>
+                <h3 class="text-lg font-semibold mb-3">Today's Summary</h3>
                 <div class="space-y-2">
                     <div class="flex justify-between">
                         <span>Total Yield:</span>
@@ -174,7 +174,7 @@
 
             <!-- Quick Tips -->
             <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold mb-3 text-gray-900">💡 Quick Tips</h3>
+                <h3 class="text-lg font-semibold mb-3 text-gray-900">Quick Tips</h3>
                 <ul class="space-y-2 text-sm text-gray-600">
                     <li class="flex items-start">
                         <span class="text-green-500 mr-2">✓</span>
@@ -264,16 +264,16 @@
 
                     if (result.success) {
                         this.messageType = 'success';
-                        this.message = '✅ ' + result.message;
+                        this.message = '' + result.message;
                         this.resetForm();
                         await this.loadTodaySummary();
                     } else {
                         this.messageType = 'error';
-                        this.message = '❌ ' + result.message;
+                        this.message = '' + result.message;
                     }
                 } catch (error) {
                     this.messageType = 'error';
-                    this.message = '❌ Error recording production: ' + error.message;
+                    this.message = 'Error recording production: ' + error.message;
                 } finally {
                     this.submitting = false;
                     setTimeout(() => { this.message = ''; }, 5000);

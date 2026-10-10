@@ -61,7 +61,7 @@ def export_readings_csv(
             query += " AND DATE(received_time) <= DATE(?)"
             params.append(end_date)
         
-        query += " ORDER BY timestamp DESC LIMIT ?"
+        query += " ORDER BY id DESC LIMIT ?"
         params.append(limit)
         
         cursor.execute(query, params)

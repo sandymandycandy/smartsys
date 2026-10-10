@@ -1,140 +1,72 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}Profile - Smart Pastoralism{% endblock %}
+{% block title %}Your account · PawTrack{% endblock %}
 
 {% block page_content %}
-<div class="max-w-4xl mx-auto">
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">👤 User Profile</h1>
-        <p class="mt-2 text-sm text-gray-600">Manage your account settings</p>
-    </div>
-
-    <!-- Success/Error Messages -->
-    {% if request.query_params.get('success') == 'password_changed' %}
-    <div class="bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-        <span class="text-xl mr-2">✅</span>
-        <span>Password changed successfully!</span>
-    </div>
-    {% endif %}
-
-    {% if request.query_params.get('error') == 'passwords_dont_match' %}
-    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-        <span class="text-xl mr-2">⚠️</span>
-        <span>New passwords do not match</span>
-    </div>
-    {% elif request.query_params.get('error') == 'password_too_short' %}
-    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-        <span class="text-xl mr-2">⚠️</span>
-        <span>Password must be at least 6 characters</span>
-    </div>
-    {% elif request.query_params.get('error') == 'wrong_password' %}
-    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-        <span class="text-xl mr-2">⚠️</span>
-        <span>Current password is incorrect</span>
-    </div>
-    {% endif %}
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Profile Info -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h2 class="text-xl font-semibold mb-6 flex items-center">
-                <span class="text-2xl mr-2">📋</span> Account Information
-            </h2>
-
-            <div class="space-y-4">
-                <div class="flex items-center p-4 bg-gray-50 rounded-lg">
-                    <div
-                        class="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-2xl text-white font-bold">
-                        {{ user.username[0]|upper if user.username else 'U' }}
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-lg font-semibold text-gray-900">{{ user.username }}</p>
-                        <p class="text-sm text-gray-600">
-                            {% if user.role == 'admin' %}
-                            <span
-                                class="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">Administrator</span>
-                            {% else %}
-                            <span
-                                class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">User</span>
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="p-4 bg-gray-50 rounded-lg">
-                        <p class="text-xs text-gray-500 uppercase tracking-wide">Session Created</p>
-                        <p class="mt-1 text-sm font-medium text-gray-900">{{ user.created_at[:10] if user.created_at
-                            else 'N/A' }}</p>
-                    </div>
-                    <div class="p-4 bg-gray-50 rounded-lg">
-                        <p class="text-xs text-gray-500 uppercase tracking-wide">Session Expires</p>
-                        <p class="mt-1 text-sm font-medium text-gray-900">{{ user.expires_at[:10] if user.expires_at
-                            else 'N/A' }}</p>
-                    </div>
-                </div>
-            </div>
-
-            {% if user.role == 'admin' %}
-            <div class="mt-6 pt-6 border-t">
-                <a href="/auth/admin/users"
-                    class="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.25-10.5a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z">
-                        </path>
-                    </svg>
-                    Manage Users
-                </a>
-            </div>
-            {% endif %}
+{% set ok = request.query_params.get('success') %}
+{% set err = request.query_params.get('error') %}
+<div class="max-w-4xl">
+    <header class="flex items-center gap-5 mb-7">
+        <span class="fk-avatar !w-16 !h-16 !text-2xl">{{ user.username[0]|upper if user.username else 'U' }}</span>
+        <div>
+            <p class="fk-eyebrow">Your account</p>
+            <h1 class="fk-h1 mt-1">{{ user.username }}</h1>
+            <p class="mt-2"><span class="fk-tag {{ 'fk-tag-done' if user.role == 'admin' else 'fk-tag-plain' }}">{{ 'Administrator' if user.role == 'admin' else 'Team member' }}</span></p>
         </div>
+    </header>
 
-        <!-- Change Password -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h2 class="text-xl font-semibold mb-6 flex items-center">
-                <span class="text-2xl mr-2">🔐</span> Change Password
-            </h2>
+    {% if ok == 'password_changed' %}
+    <p class="fk-notice fk-notice-ok mb-6" role="status">Password changed. Use the new one next time you sign in.</p>
+    {% endif %}
+    {% if err %}
+    <p class="fk-notice fk-notice-err mb-6" role="alert">
+        {{ {'passwords_dont_match': "The two new passwords don't match.", 'password_too_short': 'The new password needs at least 6 characters.', 'wrong_password': "Your current password wasn't right."}.get(err, 'Something went wrong. Try again.') }}
+    </p>
+    {% endif %}
 
-            <form action="/auth/change-password" method="post" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-                    <input type="password" name="current_password" required autocomplete="current-password"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+    <div class="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <section class="fk-card" aria-labelledby="acct-h">
+            <div class="px-5 pt-5 pb-3"><h2 id="acct-h" class="fk-h2">This session</h2></div>
+            <dl class="border-t" style="border-color:var(--line-soft)">
+                <div class="flex justify-between gap-4 px-5 py-3 border-b" style="border-color:var(--line-soft)">
+                    <dt class="text-sm fk-muted">Signed in</dt>
+                    <dd class="fk-mono text-[13px]">{{ (user.created_at or '')[:16]|replace('T', ' ') or '--' }}</dd>
                 </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                    <input type="password" name="new_password" required minlength="6" autocomplete="new-password"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <p class="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+                <div class="flex justify-between gap-4 px-5 py-3 border-b" style="border-color:var(--line-soft)">
+                    <dt class="text-sm fk-muted">Signs out automatically</dt>
+                    <dd class="fk-mono text-[13px]">{{ (user.expires_at or '')[:16]|replace('T', ' ') or '--' }}</dd>
                 </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                    <input type="password" name="confirm_password" required minlength="6" autocomplete="new-password"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <div class="flex justify-between gap-4 px-5 py-3">
+                    <dt class="text-sm fk-muted">Role</dt>
+                    <dd class="text-sm font-semibold">{{ user.role|capitalize }}</dd>
                 </div>
+            </dl>
+            <div class="flex flex-wrap gap-3 px-5 py-4 border-t" style="border-color:var(--line-soft)">
+                {% if user.role == 'admin' %}<a href="/auth/admin/users" class="fk-btn fk-btn-ghost">{{ icon('users', 'w-[18px] h-[18px]') }}Manage the team</a>{% endif %}
+                <a href="/auth/logout" class="fk-btn fk-btn-quiet">{{ icon('logout', 'w-[18px] h-[18px]') }}Sign out</a>
+            </div>
+        </section>
 
-                <button type="submit"
-                    class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition">
-                    Update Password
-                </button>
+        <section class="fk-card fk-card-pad" aria-labelledby="pw-h">
+            <h2 id="pw-h" class="fk-h2">Change your password</h2>
+            <form action="/auth/change-password" method="post" class="space-y-4 mt-5">
+                <div>
+                    <label class="fk-label" for="pw-cur">Current password</label>
+                    <input id="pw-cur" class="fk-input" type="password" name="current_password" required autocomplete="current-password">
+                </div>
+                <div>
+                    <label class="fk-label" for="pw-new">New password</label>
+                    <input id="pw-new" class="fk-input" type="password" name="new_password" required minlength="6" autocomplete="new-password">
+                    <p class="fk-hint">At least 6 characters.</p>
+                </div>
+                <div>
+                    <label class="fk-label" for="pw-conf">New password again</label>
+                    <input id="pw-conf" class="fk-input" type="password" name="confirm_password" required minlength="6" autocomplete="new-password">
+                </div>
+                <button type="submit" class="fk-btn fk-btn-primary">Update password</button>
             </form>
-        </div>
-    </div>
-
-    <!-- Logout -->
-    <div class="mt-6 text-center">
-        <a href="/auth/logout"
-            class="inline-flex items-center px-6 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition font-medium">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
-                </path>
-            </svg>
-            Sign Out
-        </a>
+        </section>
     </div>
 </div>
 {% endblock %}

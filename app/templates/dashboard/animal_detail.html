@@ -1,252 +1,287 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}{{ animal.device_id }} - Smart Pastoralism{% endblock %}
+{% block title %}{{ profile.name or animal.device_id }} · PawTrack{% endblock %}
 
 {% block page_content %}
-<div>
-    <!-- Back Button -->
-    <a href="/dashboard/animals" class="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">
-        ← Back to Animals
-    </a>
+{% set temp = animal.body_temperature or animal.temperature %}
+{% set farm = profile.farm %}
+{% set status_tag = {'critical': ('fk-tag-emerg', 'Needs help'), 'watch': ('fk-tag-prog', 'Watch'), 'recovering': ('fk-tag-recov', 'Being checked'), 'healthy': ('fk-tag-done', 'Healthy')}[profile.status] %}
 
-    <!-- Animal Header -->
-    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center">
-                {% if animal.device_id.startswith('SHEEP') %}<span class="text-6xl mr-4">🐑</span>{% else %}<span class="text-6xl mr-4">🐄</span>{% endif %}
+<nav class="text-sm fk-muted-2 mb-5" aria-label="Breadcrumb">
+    <a href="/dashboard/animals" class="hover:underline">Animals</a>
+    <span class="mx-1.5">/</span>
+    <span class="fk-mono text-xs">{{ animal.device_id }}</span>
+</nav>
+
+<!-- Header -->
+<header class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-7">
+    <div class="flex items-start gap-5">
+        <span class="hidden sm:flex w-[72px] h-[72px] rounded-xl items-center justify-center flex-none"
+            style="{% if profile.status == 'critical' %}background:var(--emerg-tint);color:var(--emerg){% elif profile.status == 'watch' %}background:var(--prog-tint);color:var(--prog-text){% else %}background:var(--brand-tint);color:var(--brand){% endif %}">
+            {{ icon('animals', 'w-9 h-9') }}
+        </span>
+        <div>
+            <p class="fk-eyebrow">{{ animal.device_id }} · {{ profile.breed ~ ' ' if profile.breed }}{{ profile.kind|lower }}{% if farm %} · {{ farm.farm_name }}{% endif %}</p>
+            <h1 class="fk-h1 mt-2">{{ profile.name or animal.device_id }}</h1>
+            <p class="mt-3 flex flex-wrap items-center gap-2.5">
+                <span class="fk-tag {{ status_tag[0] }}">{{ status_tag[1] }}</span>
+                <span class="fk-muted">{{ profile.condition }}</span>
+                <span class="fk-mono text-xs fk-muted-2">· last heard {{ profile.last_seen }} ago</span>
+            </p>
+        </div>
+    </div>
+    <div class="flex flex-wrap gap-3">
+        <button type="button" class="fk-btn" style="background:#1F7A3D;color:#fff"
+            onclick="window.dispatchEvent(new CustomEvent('contact-vet', { detail: { id: {{ animal.device_id|tojson|forceescape }} } }))">{{ icon('message', 'w-[18px] h-[18px]') }}Contact a vet</button>
+        {% if farm and farm.contact_phone %}
+        <a href="tel:{{ farm.contact_phone }}" class="fk-btn fk-btn-ghost">{{ icon('phone', 'w-[18px] h-[18px]') }}Call {{ farm.owner_name.split()[0] if farm.owner_name and not farm.owner_name.startswith('Farm') else 'farm' }}</a>
+        {% endif %}
+        <a href="/dashboard/map" class="fk-btn fk-btn-primary">{{ icon('map', 'w-[18px] h-[18px]') }}Find on map</a>
+    </div>
+</header>
+
+<!-- Open alerts first -->
+{% set open_alerts = alerts|selectattr('resolved', 'equalto', 0)|list %}
+
+{% if open_alerts %}
+<section class="mb-7 rounded-xl border" style="{% if profile.status == 'critical' %}background:var(--emerg-tint);border-color:var(--emerg-border){% else %}background:var(--prog-tint);border-color:#EDD9A8{% endif %}"
+    aria-labelledby="open-h" x-data="{ open: {{ open_alerts|map(attribute='id')|list|tojson }} }">
+    <div class="px-5 pt-4 pb-2 flex items-center gap-2.5">
+        <span class="fk-dot {{ 'fk-dot-emerg fk-pulse' if profile.status == 'critical' else 'fk-dot-prog' }}"></span>
+        <h2 id="open-h" class="fk-h2 text-[17px]">{{ open_alerts|length }} open alert{{ 's' if open_alerts|length != 1 }} on {{ profile.name or animal.device_id }}</h2>
+    </div>
+    <ul>
+        {% for al in open_alerts %}
+        <li class="flex items-center gap-3 px-5 py-3 border-t" style="border-color:rgba(31,42,31,.08)" x-show="open.includes({{ al.id }})">
+            <div class="min-w-0 flex-1">
+                <p class="font-semibold text-sm">{{ al.condition }}</p>
+                <p class="fk-mono text-[11px] fk-muted mt-0.5">{{ al.alert_type|lower }} · {{ al.since }} ago</p>
+            </div>
+            <button class="fk-btn fk-btn-ghost fk-btn-sm"
+                @click="fetch('/api/alerts/{{ al.id }}/resolve', { method: 'POST' }).then(r => { if (r.ok) { open = open.filter(i => i !== {{ al.id }}); window.fkRefreshAlertCount && fkRefreshAlertCount(); } })">Resolve</button>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<!-- Vitals strip -->
+<section class="fk-card fk-kpis mb-7" aria-label="Latest vitals">
+    <div>
+        <p class="fk-eyebrow">Body temp</p>
+        <p class="fk-kpi mt-3" {% if temp and temp > 39.5 %}style="color:var(--emerg)"{% elif temp and temp > 39.3 %}style="color:var(--prog-text)"{% endif %}>
+            {{ "%.1f"|format(temp) if temp else '--' }}<span class="text-xl align-top ml-0.5">°C</span></p>
+        <p class="text-sm fk-muted-2 mt-2">normal 38.0 to 39.3</p>
+    </div>
+    <div>
+        <p class="fk-eyebrow">Heart rate</p>
+        <p class="fk-kpi mt-3" {% if animal.heart_rate and animal.heart_rate > 80 %}style="color:var(--emerg)"{% elif animal.heart_rate and animal.heart_rate > 75 %}style="color:var(--prog-text)"{% endif %}>
+            {{ animal.heart_rate or '--' }}<span class="text-base font-semibold fk-muted-2 ml-1">bpm</span></p>
+        <p class="text-sm fk-muted-2 mt-2">normal 48 to 75</p>
+    </div>
+    <div>
+        <p class="fk-eyebrow">Around them</p>
+        <p class="fk-kpi mt-3">{{ "%.0f"|format(animal.ambient_temperature) if animal.ambient_temperature else '--' }}<span class="text-xl align-top ml-0.5">°C</span></p>
+        <p class="text-sm fk-muted-2 mt-2">{{ "%.0f"|format(animal.humidity) ~ '% humidity' if animal.humidity else 'humidity unknown' }}</p>
+    </div>
+    <div>
+        <p class="fk-eyebrow">Collar</p>
+        <p class="fk-kpi mt-3" {% if animal.battery is not none and animal.battery < 20 %}style="color:var(--emerg)"{% endif %}>{{ animal.battery if animal.battery is not none else '--' }}<span class="text-xl align-top ml-0.5">%</span></p>
+        <p class="text-sm fk-muted-2 mt-2">activity {{ "%.2f"|format(animal.motion_magnitude or 0) }} g</p>
+    </div>
+</section>
+
+<div class="grid gap-7 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div class="min-w-0 space-y-7">
+        <!-- Trends -->
+        <section class="fk-card fk-card-pad" aria-labelledby="trend-h">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 id="trend-h" class="fk-h2">Last 24 hours on collar</h2>
+                <span class="fk-mono text-xs fk-muted-2">{{ history|length }} readings{% if history %} · ending {{ animal.received_time[:16] }}{% endif %}</span>
+            </div>
+            {% if history %}
+            <div class="grid md:grid-cols-2 gap-6 mt-5">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900">{{ animal.device_id }}</h1>
-                    <p class="text-sm text-gray-600">Last update: {{ animal.received_time }}</p>
+                    <p class="text-sm font-semibold">Body temperature <span class="fk-muted-2 font-normal">°C</span></p>
+                    <div class="relative h-56 mt-3"><canvas id="tempChart" aria-label="Body temperature over the last 24 hours" role="img"></canvas></div>
                 </div>
-            </div>
-            <div class="text-right">
-                {% if animal.temperature > 39.5 or animal.heart_rate > 80 %}
-                <span class="px-4 py-2 text-lg font-semibold rounded-full bg-red-100 text-red-800">
-                    🚨 Critical
-                </span>
-                {% elif animal.temperature > 39.0 or animal.heart_rate > 75 %}
-                <span class="px-4 py-2 text-lg font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                    ⚠️ Warning
-                </span>
-                {% else %}
-                <span class="px-4 py-2 text-lg font-semibold rounded-full bg-green-100 text-green-800">
-                    ✅ Healthy
-                </span>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Current Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <!-- Body Temperature -->
-        <div
-            class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 relative overflow-hidden">
-            <div class="absolute top-0 right-0 p-4 opacity-10">
-                <span class="text-6xl">🌡️</span>
-            </div>
-            <div class="text-sm font-medium text-gray-600 mb-2 uppercase tracking-wide">Body Temperature</div>
-            <div
-                class="text-3xl font-bold flex items-end
-                {% set temp = animal.body_temperature if animal.body_temperature else animal.temperature %}
-                {% if temp > 39.5 %}text-red-600{% elif temp > 39.0 %}text-yellow-600{% else %}text-emerald-600{% endif %}">
-                {{ "%.1f"|format(temp) }}
-                <span class="text-xl ml-1 text-gray-500 font-normal">°C</span>
-            </div>
-            <p class="text-xs text-gray-400 mt-2">Target: 38.0 - 39.3°C</p>
-        </div>
-
-        <!-- Ambient Conditions -->
-        <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-            <div class="text-sm font-medium text-gray-600 mb-2 uppercase tracking-wide">Environment</div>
-            <div class="flex justify-between items-end">
                 <div>
-                    <span class="text-xs text-gray-400">Ambient</span>
-                    <div class="text-2xl font-bold text-blue-600">
-                        {{ "%.1f"|format(animal.ambient_temperature or 0) }}°C
-                    </div>
-                </div>
-                <div class="text-right">
-                    <span class="text-xs text-gray-400">Humidity</span>
-                    <div class="text-2xl font-bold text-cyan-600">
-                        {{ "%.1f"|format(animal.humidity or 0) }}%
-                    </div>
+                    <p class="text-sm font-semibold">Heart rate <span class="fk-muted-2 font-normal">bpm</span></p>
+                    <div class="relative h-56 mt-3"><canvas id="hrChart" aria-label="Heart rate over the last 24 hours" role="img"></canvas></div>
                 </div>
             </div>
-        </div>
+            <p class="text-xs fk-muted-2 mt-4">The shaded band is the normal range.</p>
+            {% else %}
+            <p class="fk-muted mt-4">No readings in the 24 hours before the last report.</p>
+            {% endif %}
+        </section>
 
-        <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-            <div class="text-sm font-medium text-gray-600 mb-2 uppercase tracking-wide">Heart Rate</div>
-            <div
-                class="text-3xl font-bold {% if animal.heart_rate > 80 %}text-red-600{% elif animal.heart_rate > 75 %}text-yellow-600{% else %}text-rose-600{% endif %}">
-                {{ animal.heart_rate }} <span class="text-base text-gray-500 font-normal">BPM</span>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-            <div class="text-sm font-medium text-gray-600 mb-2 uppercase tracking-wide">Battery & Motion</div>
-            <div class="flex justify-between items-end">
-                <div>
-                    <span class="text-xs text-gray-400">Battery</span>
-                    <div
-                        class="text-2xl font-bold {% if animal.battery < 20 %}text-red-600{% else %}text-green-600{% endif %}">
-                        {{ animal.battery }}%
+        <!-- Alert history -->
+        <section class="fk-card" aria-labelledby="hist-h">
+            <div class="px-5 pt-5 pb-3"><h2 id="hist-h" class="fk-h2">Alert history</h2></div>
+            {% if alerts %}
+            <ul class="border-t" style="border-color:var(--line-soft)">
+                {% for al in alerts %}
+                <li class="fk-alert sev-{{ al.severity }} flex items-center gap-3">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold">{{ al.condition }}</p>
+                        <p class="fk-mono text-[11px] fk-muted-2 mt-0.5">{{ al.alert_time[:16]|replace('T', ' ') }} · {{ al.since }} ago</p>
                     </div>
-                </div>
-                <div class="text-right">
-                    <span class="text-xs text-gray-400">Activity</span>
-                    <div class="text-2xl font-bold text-purple-600">
-                        {{ "%.2f"|format(animal.motion_magnitude or 0) }}g
+                    {% if al.resolved %}<span class="fk-tag fk-tag-plain">Resolved</span>
+                    {% elif al.severity == 'critical' %}<span class="fk-tag fk-tag-emerg">Open</span>
+                    {% else %}<span class="fk-tag fk-tag-prog">Open</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="px-5 pb-6 fk-muted">No alerts yet. {{ profile.name or 'This animal' }} has been well.</p>
+            {% endif %}
+        </section>
+
+        <!-- Health history: what the vet receives with "Send details to vet" -->
+        {% if history and history.events %}
+        {% set kind_tag = {'illness': ('fk-tag-emerg', 'Illness'), 'treatment': ('fk-tag-prog', 'Treatment'), 'recovery': ('fk-tag-done', 'Recovered'), 'vaccination': ('fk-tag-recov', 'Vaccination'), 'deworming': ('fk-tag-plain', 'Deworming'), 'checkup': ('fk-tag-plain', 'Check-up'), 'breeding': ('fk-tag-recov', 'Breeding'), 'shearing': ('fk-tag-plain', 'Shearing')} %}
+        <section class="fk-card" aria-labelledby="health-h" x-data="{ all: false }">
+            <div class="px-5 pt-5 pb-3 flex items-baseline justify-between gap-3">
+                <h2 id="health-h" class="fk-h2">Health history · past year</h2>
+                <span class="text-xs fk-muted-2">{{ history.events|length }} records · {{ history.alerts_year }} alerts</span>
+            </div>
+            {% if history.vitals30 and history.vitals30.avg_temp %}
+            <p class="px-5 pb-3 text-sm fk-muted">Last 30 days: avg {{ history.vitals30.avg_temp }}°C (highest {{ history.vitals30.max_temp }}°C), heart rate {{ history.vitals30.avg_hr }} bpm</p>
+            {% endif %}
+            <ul class="border-t" style="border-color:var(--line-soft)">
+                {% for e in history.events|reverse %}
+                <li class="flex items-start gap-3 px-5 py-3 border-b" style="border-color:var(--line-soft)" {% if loop.index > 8 %}x-show="all" x-cloak{% endif %}>
+                    <span class="fk-mono text-[11px] fk-muted-2 w-[78px] flex-none pt-0.5">{{ e.event_date[:10] }}</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold flex flex-wrap items-center gap-2">
+                            <span class="fk-tag {{ kind_tag.get(e.event_type, ('fk-tag-plain', e.event_type))[0] }}">{{ kind_tag.get(e.event_type, ('fk-tag-plain', e.event_type))[1] }}</span>{{ e.title }}
+                        </p>
+                        {% if e.details %}<p class="text-[13px] fk-muted mt-1">{{ e.details }}</p>{% endif %}
+                        {% if e.vet_name %}<p class="text-xs fk-muted-2 mt-0.5">{{ e.vet_name }}</p>{% endif %}
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Charts -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-lg font-semibold mb-4">Temperature Trend (24h)</h3>
-            <div style="position: relative; height: 300px;">
-                <canvas id="tempChart"></canvas>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-lg font-semibold mb-4">Heart Rate Trend (24h)</h3>
-            <div style="position: relative; height: 300px;">
-                <canvas id="hrChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- Location Map -->
-    {% if animal.latitude and animal.longitude %}
-    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <h3 class="text-lg font-semibold mb-4">📍 Current Location</h3>
-        <div id="animalMap" style="height: 300px; border-radius: 8px;"></div>
-    </div>
-    {% endif %}
-
-    <!-- Recent Alerts -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
-        <h3 class="text-lg font-semibold mb-4">🔔 Recent Alerts</h3>
-        {% if alerts %}
-        <div class="space-y-3">
-            {% for alert in alerts %}
-            <div
-                class="p-4 border rounded-lg {% if 'CRITICAL' in alert.alert_type %}border-red-200 bg-red-50{% elif 'WARNING' in alert.alert_type %}border-yellow-200 bg-yellow-50{% else %}border-blue-200 bg-blue-50{% endif %}">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <span class="font-semibold text-sm">{{ alert.alert_type }}</span>
-                        <p class="text-sm text-gray-700 mt-1">{{ alert.alert_message }}</p>
-                        <p class="text-xs text-gray-500 mt-1">{{ alert.alert_time }}</p>
-                    </div>
-                    {% if not alert.resolved %}
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Active</span>
-                    {% else %}
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Resolved</span>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-gray-500 text-center py-4">No alerts for this animal ✅</p>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if history.events|length > 8 %}
+            <button type="button" class="w-full py-3 text-sm font-semibold" style="color:var(--brand)" @click="all = !all"
+                x-text="all ? 'Show less' : 'Show all {{ history.events|length }} records'"></button>
+            {% endif %}
+        </section>
         {% endif %}
     </div>
+
+    <aside class="space-y-7 min-w-0">
+        <!-- Where -->
+        <section class="fk-card overflow-hidden" aria-labelledby="where-h">
+            <div class="px-5 pt-5 pb-3">
+                <h2 id="where-h" class="fk-h2">Last known spot</h2>
+                {% if animal.latitude and animal.longitude %}
+                <p class="fk-mono text-xs fk-muted-2 mt-1">{{ "%.5f"|format(animal.latitude) }}, {{ "%.5f"|format(animal.longitude) }}</p>
+                {% endif %}
+            </div>
+            {% if animal.latitude and animal.longitude %}
+            <div id="animalMap" class="h-64 border-t" style="border-color:var(--line)"></div>
+            {% else %}
+            <p class="px-5 pb-5 fk-muted">No GPS fix from this collar yet.</p>
+            {% endif %}
+        </section>
+
+        <!-- Farm -->
+        {% if farm %}
+        <section class="fk-card fk-card-pad" aria-labelledby="farm-h">
+            <p class="fk-eyebrow">Farm</p>
+            <h2 id="farm-h" class="fk-h2 mt-2"><a href="/farms/{{ farm.id }}" class="hover:underline">{{ farm.farm_name }}</a></h2>
+            <p class="fk-muted text-sm mt-1">{{ farm.location }}</p>
+            {% if farm.owner_name %}
+            <div class="flex items-center gap-3 mt-4 pt-4 border-t" style="border-color:var(--line-soft)">
+                <span class="fk-avatar">{{ (farm.owner_name.split()|map('first')|join('')|upper)[:2] }}</span>
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold">{{ farm.owner_name }}</p>
+                    <p class="fk-mono text-[11px] fk-muted-2">{{ farm.contact_phone }}</p>
+                </div>
+                {% if farm.contact_phone %}<a href="tel:{{ farm.contact_phone }}" class="fk-btn fk-btn-ghost fk-btn-sm" aria-label="Call {{ farm.owner_name }}">{{ icon('phone', 'w-4 h-4') }}</a>{% endif %}
+            </div>
+            {% endif %}
+        </section>
+        {% endif %}
+    </aside>
 </div>
 
 <script>
-    // Historical data
-    const history = {{ history | tojson }};
+    (function () {
+        var history = {{ history | tojson }};
+        if (!history.length || !window.Chart) return;
 
-    // Temperature Chart
-    const tempCtx = document.getElementById('tempChart').getContext('2d');
-    const tempChart = new Chart(tempCtx, {
-        type: 'line',
-        data: {
-            labels: history.map(h => new Date(h.timestamp * 1000).toLocaleTimeString()),
-            datasets: [{
-                label: 'Temperature (°C)',
-                data: history.map(h => h.temperature),
-                borderColor: '#EF4444',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    suggestedMin: 36,
-                    suggestedMax: 41
-                },
-                x: {
-                    ticks: {
-                        maxTicksLimit: 12
-                    }
+        var labels = history.map(function (h) {
+            var d = h.received_time ? new Date(h.received_time.replace(' ', 'T')) : new Date(h.timestamp * 1000);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        });
+
+        // Draw the normal range as a soft band behind the line
+        function bandPlugin(lo, hi) {
+            return {
+                id: 'normalBand',
+                beforeDatasetsDraw: function (chart) {
+                    var y = chart.scales.y, a = chart.chartArea, ctx = chart.ctx;
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(63, 125, 42, 0.08)';
+                    ctx.fillRect(a.left, y.getPixelForValue(hi), a.right - a.left, y.getPixelForValue(lo) - y.getPixelForValue(hi));
+                    ctx.restore();
                 }
-            }
+            };
         }
-    });
 
-    // Heart Rate Chart
-    const hrCtx = document.getElementById('hrChart').getContext('2d');
-    const hrChart = new Chart(hrCtx, {
-        type: 'line',
-        data: {
-            labels: history.map(h => new Date(h.timestamp * 1000).toLocaleTimeString()),
-            datasets: [{
-                label: 'Heart Rate (BPM)',
-                data: history.map(h => h.heart_rate),
-                borderColor: '#EF4444',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    suggestedMin: 40,
-                    suggestedMax: 100
+        function lineChart(id, values, unit, lo, hi, min, max) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            new Chart(el, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        borderColor: '#3F7D2A',
+                        backgroundColor: '#3F7D2A',
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        tension: 0.3
+                    }]
                 },
-                x: {
-                    ticks: {
-                        maxTicksLimit: 12
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { displayColors: false, callbacks: { label: function (c) { return c.parsed.y + ' ' + unit; } } }
+                    },
+                    scales: {
+                        y: { suggestedMin: min, suggestedMax: max, grid: { color: '#EAE3D5' }, border: { display: false } },
+                        x: { grid: { display: false }, ticks: { maxTicksLimit: 5, maxRotation: 0, autoSkipPadding: 16 } }
                     }
-                }
-            }
+                },
+                plugins: [bandPlugin(lo, hi)]
+            });
         }
-    });
 
-    // Location Map
+        lineChart('tempChart', history.map(function (h) { return h.body_temperature || h.temperature; }), '°C', 38.0, 39.3, 37, 41);
+        lineChart('hrChart', history.map(function (h) { return h.heart_rate; }), 'bpm', 48, 75, 40, 95);
+    })();
+
     {% if animal.latitude and animal.longitude %}
     (function () {
         var container = document.getElementById('animalMap');
         if (!container || container._leaflet_id) return;
-
-        var map = L.map('animalMap').setView([{{ animal.latitude }}, {{ animal.longitude }}], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-    }).addTo(map);
-
-    L.marker([{{ animal.latitude }}, {{ animal.longitude }}]).addTo(map)
-        .bindPopup('<b>{{ animal.device_id }}</b><br>Current Location').openPopup();
-    }) ();
+        var map = L.map('animalMap', { scrollWheelZoom: false }).setView([{{ animal.latitude }}, {{ animal.longitude }}], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        L.circleMarker([{{ animal.latitude }}, {{ animal.longitude }}], {
+            radius: 9, weight: 3, color: '#FFFDF8',
+            fillColor: '{{ "#C2410C" if profile.status == "critical" else ("#B7791F" if profile.status == "watch" else "#3F7D2A") }}',
+            fillOpacity: 1
+        }).addTo(map).bindPopup('<b>' + fkEsc({{ (profile.name or animal.device_id)|tojson }}) + '</b><br>' + fkEsc({{ animal.device_id|tojson }}));
+    })();
     {% endif %}
 </script>
 {% endblock %}

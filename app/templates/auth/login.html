@@ -1,152 +1,70 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "public-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Smart Pastoralism</title>
-    <meta name="description" content="Login to Smart Pastoralism - IoT Livestock Monitoring System">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @keyframes float {
+{% block title %}Sign in · PawTrack{% endblock %}
 
-            0%,
-            100% {
-                transform: translateY(0px);
-            }
-
-            50% {
-                transform: translateY(-10px);
-            }
-        }
-
-        .float-animation {
-            animation: float 3s ease-in-out infinite;
-        }
-
-        .glass-effect {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-        }
-    </style>
-</head>
-
-<body class="min-h-screen flex items-center justify-center p-4"
-    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #6B8DD6 100%);">
-
-    <!-- Background decorations -->
-    <div class="absolute inset-0 overflow-hidden pointer-events-none">
-        <div class="absolute top-20 left-10 text-8xl opacity-20 float-animation" style="animation-delay: 0s;">🐄</div>
-        <div class="absolute top-40 right-20 text-6xl opacity-20 float-animation" style="animation-delay: 0.5s;">🐮
+{% block page_content %}
+<div class="min-h-screen grid lg:grid-cols-2">
+    <!-- Left: brand panel -->
+    <aside class="hidden lg:flex flex-col justify-between p-12 border-r" style="background:var(--sidebar);border-color:var(--line)">
+        <a href="/" class="flex items-center gap-2.5">
+            <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg" style="background:var(--brand);color:#fff">{{ icon('animals', 'w-5 h-5') }}</span>
+            <span class="fk-display text-xl font-extrabold">PawTrack</span>
+        </a>
+        <div>
+            <p class="fk-display font-extrabold text-[40px] leading-[1.05] tracking-tight max-w-md">
+                Every collar, every farm, one quiet morning check.
+            </p>
+            <p class="fk-muted mt-4 max-w-md">Sign in to see which animals need you first.</p>
         </div>
-        <div class="absolute bottom-20 left-20 text-7xl opacity-20 float-animation" style="animation-delay: 1s;">🌾
-        </div>
-        <div class="absolute bottom-40 right-10 text-5xl opacity-20 float-animation" style="animation-delay: 1.5s;">📍
-        </div>
-    </div>
+        <a href="tel:1962" class="fk-card p-4 flex items-center justify-between max-w-xs">
+            <span>
+                <span class="fk-eyebrow" style="color:var(--emerg-text)">Vet emergency</span>
+                <span class="block fk-display text-2xl font-extrabold mt-1">1962</span>
+            </span>
+            <span class="inline-flex w-10 h-10 rounded-lg items-center justify-center" style="background:var(--emerg-tint);color:var(--emerg)">{{ icon('phone', 'w-5 h-5') }}</span>
+        </a>
+    </aside>
 
-    <div class="glass-effect rounded-3xl shadow-2xl p-8 w-full max-w-md relative z-10">
-        <!-- Logo & Title -->
-        <div class="text-center mb-8">
-            <div class="inline-block p-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg mb-4">
-                <span class="text-5xl">🐄</span>
+    <!-- Right: form -->
+    <main class="flex items-center justify-center p-6">
+        <div class="w-full max-w-[400px]">
+            <a href="/" class="lg:hidden flex items-center gap-2.5 mb-10">
+                <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg" style="background:var(--brand);color:#fff">{{ icon('animals', 'w-5 h-5') }}</span>
+                <span class="fk-display text-xl font-extrabold">PawTrack</span>
+            </a>
+
+            <p class="fk-eyebrow">Welcome back</p>
+            <h1 class="fk-display font-extrabold text-[32px] leading-tight mt-2">Sign in to your herd</h1>
+
+            {% if request.query_params.get('error') %}
+            <div class="mt-6 rounded-lg px-4 py-3 text-sm border" role="alert"
+                style="background:var(--emerg-tint);border-color:var(--emerg-border);color:var(--emerg-text)">
+                That username and password didn't match. Try again.
             </div>
-            <h1 class="text-3xl font-bold text-gray-900">Smart Pastoralism</h1>
-            <p class="text-gray-600 mt-2">IoT Livestock Monitoring System</p>
-        </div>
+            {% endif %}
 
-        <!-- Error Message -->
-        {% if request.query_params.get('error') %}
-        <div class="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-            <span class="text-xl mr-2">⚠️</span>
-            <span>Invalid username or password</span>
-        </div>
-        {% endif %}
-
-        <!-- Login Form -->
-        <form action="/auth/login" method="post" class="space-y-5">
-            <div>
-                <label class="block text-gray-700 font-medium mb-2">
-                    <span class="flex items-center">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
-                        Username
-                    </span>
-                </label>
-                <input type="text" name="username" required autocomplete="username" placeholder="Enter your username"
-                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200">
-            </div>
-
-            <div>
-                <label class="block text-gray-700 font-medium mb-2">
-                    <span class="flex items-center">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
-                            </path>
-                        </svg>
-                        Password
-                    </span>
-                </label>
-                <input type="password" name="password" required autocomplete="current-password"
-                    placeholder="Enter your password"
-                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200">
-            </div>
-
-            <!-- Remember Me -->
-            <div class="flex items-center justify-between">
-                <label class="flex items-center cursor-pointer">
-                    <input type="checkbox" name="remember" value="true"
-                        class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500">
-                    <span class="ml-2 text-sm text-gray-600">Remember me for 30 days</span>
-                </label>
-            </div>
-
-            <button type="submit"
-                class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-[1.02] shadow-lg">
-                Sign In
-            </button>
-        </form>
-
-        <!-- Features -->
-        <div class="mt-8 pt-6 border-t border-gray-200">
-            <p class="text-center text-sm text-gray-500 mb-4">System Features</p>
-            <div class="grid grid-cols-3 gap-4 text-center">
-                <div class="p-2">
-                    <span class="text-2xl">📊</span>
-                    <p class="text-xs text-gray-600 mt-1">Real-time Monitoring</p>
+            <form action="/auth/login" method="post" class="mt-8 space-y-5">
+                <div>
+                    <label for="username" class="block text-sm font-semibold mb-2">Username</label>
+                    <input id="username" type="text" name="username" required autocomplete="username" autofocus class="fk-input">
                 </div>
-                <div class="p-2">
-                    <span class="text-2xl">🔔</span>
-                    <p class="text-xs text-gray-600 mt-1">Smart Alerts</p>
+                <div>
+                    <label for="password" class="block text-sm font-semibold mb-2">Password</label>
+                    <input id="password" type="password" name="password" required autocomplete="current-password" class="fk-input">
                 </div>
-                <div class="p-2">
-                    <span class="text-2xl">📍</span>
-                    <p class="text-xs text-gray-600 mt-1">GPS Tracking</p>
-                </div>
-            </div>
+                <label class="flex items-center gap-2.5 text-sm fk-muted cursor-pointer">
+                    <input type="checkbox" name="remember" value="true" class="w-4 h-4 rounded" style="accent-color:var(--brand)">
+                    Keep me signed in for 30 days
+                </label>
+                <button type="submit" class="fk-btn fk-btn-primary w-full">Sign in</button>
+            </form>
+
+            <details class="mt-8 text-sm">
+                <summary class="cursor-pointer fk-muted font-semibold">Demo credentials</summary>
+                <p class="mt-3 fk-muted">Username <code class="fk-kbd">admin</code> · Password <code class="fk-kbd">admin123</code></p>
+            </details>
         </div>
-
-        <!-- Default Credentials -->
-        <div class="mt-6 text-center">
-            <button onclick="document.getElementById('credentials').classList.toggle('hidden')"
-                class="text-sm text-purple-600 hover:text-purple-700 focus:outline-none">
-                Show demo credentials
-            </button>
-            <div id="credentials" class="hidden mt-2 p-3 bg-gray-100 rounded-lg">
-                <p class="text-sm text-gray-600">Username: <code class="bg-white px-2 py-1 rounded">admin</code></p>
-                <p class="text-sm text-gray-600 mt-1">Password: <code class="bg-white px-2 py-1 rounded">admin123</code>
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="absolute bottom-4 text-center text-white text-sm opacity-70">
-        <p>Smart Pastoralism v1.0 • IoT Livestock Monitoring</p>
-    </div>
-</body>
-
-</html>
+    </main>
+</div>
+{% endblock %}

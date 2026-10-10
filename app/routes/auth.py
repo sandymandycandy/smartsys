@@ -202,6 +202,14 @@ async def logout(request: Request):
     response.delete_cookie("session_id")
     return response
 
+@router.get("/me")
+async def current_user_info(request: Request):
+    """Signed-in user's name and role, for the app shell"""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"username": user["username"], "role": user.get("role")}
+
 @router.get("/profile", response_class=HTMLResponse)
 async def profile_page(request: Request):
     """User profile page"""

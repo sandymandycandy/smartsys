@@ -1,20 +1,83 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-50">
+<html lang="en" class="h-full">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#3B82F6">
+    <meta name="theme-color" content="#F4EFE6">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="description" content="Smart Pastoralism - IoT Livestock Monitoring System">
-    <title>{% block title %}Smart Pastoralism{% endblock %}</title>
+    <meta name="description" content="PawTrack - IoT Livestock Monitoring System">
+    <title>{% block title %}PawTrack{% endblock %}</title>
+
+    <!-- Fonts: Field Kit type system -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Field Kit: remap Tailwind's palette so every existing page picks up the
+        // warm paper look. One accent per meaning: green = brand/done,
+        // orange-red = emergency, amber = in progress, slate = recovering.
+        (function () {
+            var warm = { 50: '#F4EFE6', 100: '#EBE4D6', 200: '#DDD4C3', 300: '#CFC5B1', 400: '#A39C8C', 500: '#6E7769', 600: '#5A6457', 700: '#3D473B', 800: '#2B352A', 900: '#1F2A1F', 950: '#141B14' };
+            var green = { 50: '#F1F6EA', 100: '#E3EDD5', 200: '#C9D8B6', 300: '#A9C28F', 400: '#6FA052', 500: '#4E8C36', 600: '#3F7D2A', 700: '#2C5A1C', 800: '#234815', 900: '#1A3610', 950: '#10230A' };
+            var emerg = { 50: '#FDF3EC', 100: '#FBE6D9', 200: '#F0C9AE', 300: '#E5A47E', 400: '#D9733F', 500: '#C2410C', 600: '#C2410C', 700: '#9A3309', 800: '#7A2A08', 900: '#5C2006', 950: '#3D1504' };
+            var amber = { 50: '#FBF5E6', 100: '#F7ECD3', 200: '#EDD9A8', 300: '#DDB96A', 400: '#C99532', 500: '#B7791F', 600: '#9C6619', 700: '#6B4A0E', 800: '#563B0B', 900: '#3F2B08', 950: '#2A1C05' };
+            var slate = { 50: '#F1F4F5', 100: '#E6ECEF', 200: '#CDD8DD', 300: '#A7B8C0', 400: '#7A929D', 500: '#5A7480', 600: '#3F5A67', 700: '#2B4552', 800: '#20343E', 900: '#16242B', 950: '#0E171C' };
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            white: '#FFFDF8',
+                            gray: warm, zinc: warm, neutral: warm, stone: warm,
+                            green: green, emerald: green, teal: green, lime: green, blue: green, indigo: green,
+                            red: emerg, orange: emerg, rose: emerg,
+                            yellow: amber, amber: amber,
+                            slate: slate, sky: slate, cyan: slate, purple: slate, violet: slate, fuchsia: slate, pink: slate,
+                            paper: '#F4EFE6', ink: '#1F2A1F'
+                        },
+                        fontFamily: {
+                            sans: ['Instrument Sans', 'system-ui', 'sans-serif'],
+                            display: ['Bricolage Grotesque', 'Instrument Sans', 'sans-serif'],
+                            mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
+                        }
+                    }
+                }
+            };
+        })();
+    </script>
 
     <!-- Chart.js -->
     <script src="/static/js/chart.umd.min.js"></script>
+    <script>
+        // Escape text before putting it into HTML strings (Leaflet popups etc.)
+        window.fkEsc = function (s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        };
+    </script>
+    <script>
+        // Field Kit chart defaults: UI font, text in ink tokens, recessive warm grid
+        if (window.Chart) {
+            Chart.defaults.font.family = "'Instrument Sans', system-ui, sans-serif";
+            Chart.defaults.font.size = 12;
+            Chart.defaults.color = '#5A6457';
+            Chart.defaults.borderColor = '#EAE3D5';
+            Chart.defaults.elements.line.borderWidth = 2;
+            Chart.defaults.elements.bar.borderRadius = 4;
+            Chart.defaults.plugins.legend.labels.boxWidth = 10;
+            Chart.defaults.plugins.legend.labels.boxHeight = 10;
+            Chart.defaults.plugins.tooltip.backgroundColor = '#1F2A1F';
+            Chart.defaults.plugins.tooltip.titleFont = { family: "'JetBrains Mono', monospace", size: 11 };
+            Chart.defaults.plugins.tooltip.padding = 10;
+            Chart.defaults.plugins.tooltip.cornerRadius = 8;
+        }
+    </script>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="/static/css/leaflet.css" />
@@ -28,6 +91,9 @@
 
     <!-- Enhanced UI/UX (RPi5-optimized) -->
     <link rel="stylesheet" href="/static/css/enhanced.css" />
+
+    <!-- Field Kit design system (loaded last so it wins) -->
+    <link rel="stylesheet" href="/static/css/fieldkit.css?v=4" />
 
     <style>
         [x-cloak] {
@@ -106,7 +172,7 @@
                 ws = new WebSocket(wsUrl);
 
                 ws.onopen = () => {
-                    console.log('✅ WebSocket connected');
+                    console.log('WebSocket connected');
                 };
 
                 ws.onmessage = (event) => {
@@ -115,21 +181,21 @@
                 };
 
                 ws.onerror = (error) => {
-                    console.error('❌ WebSocket error:', error);
+                    console.error('WebSocket error:', error);
                 };
 
                 ws.onclose = () => {
-                    console.log('🔌 WebSocket disconnected, reconnecting...');
+                    console.log('WebSocket disconnected, reconnecting...');
                     setTimeout(connectWebSocket, 3000);
                 };
             } catch (error) {
-                console.error('❌ Failed to connect WebSocket:', error);
+                console.error('Failed to connect WebSocket:', error);
                 setTimeout(connectWebSocket, 3000);
             }
         }
 
         function handleWebSocketMessage(data) {
-            console.log('📦 WebSocket message:', data);
+            console.log('WebSocket message:', data);
 
             // Dispatch custom event for components to listen to
             window.dispatchEvent(new CustomEvent('ws-message', { detail: data }));

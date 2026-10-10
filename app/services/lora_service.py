@@ -447,7 +447,7 @@ def get_herd_stats() -> Dict:
                 SUM(CASE WHEN battery BETWEEN 20 AND 50 THEN 1 ELSE 0 END) as low,
                 SUM(CASE WHEN battery < 20 THEN 1 ELSE 0 END) as critical
             FROM (
-                SELECT device_id, battery, MAX(timestamp) as max_time
+                SELECT device_id, battery, MAX(id) as max_id
                 FROM livestock_readings
                 GROUP BY device_id
             )

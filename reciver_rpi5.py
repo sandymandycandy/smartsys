@@ -10,7 +10,8 @@ import time
 import sqlite3
 import math
 import json
-import requests
+import os
+import urllib.request
 from datetime import datetime, timedelta
 
 # ===== CONFIGURATION =====
@@ -24,11 +25,13 @@ CS_PIN = 8
 # SX1276/78 Registers
 REG_FIFO = 0x00
 REG_OP_MODE = 0x01
+REG_LNA = 0x0C
 REG_FRF_MSB = 0x06
 REG_FRF_MID = 0x07
 REG_FRF_LSB = 0x08
 REG_FIFO_ADDR_PTR = 0x0D
 REG_FIFO_RX_BASE = 0x0F
+REG_FIFO_RX_CURRENT_ADDR = 0x10
 REG_IRQ_FLAGS = 0x12
 REG_RX_NB_BYTES = 0x13
 REG_PKT_RSSI_VALUE = 0x1A
@@ -52,6 +55,25 @@ MOTION_LOW_THRESHOLD = 0.5  # g-force
 MOTION_HIGH_THRESHOLD = 2.0  # g-force
 BATTERY_LOW = 20  # percentage
 
+# Location used when a collar has no GPS fix. Set GATEWAY_LAT / GATEWAY_LON
+# to pin it; otherwise it is looked up once from the gateway's IP address.
+GATEWAY_LAT = os.getenv("GATEWAY_LAT")
+GATEWAY_LON = os.getenv("GATEWAY_LON")
+
+
+def get_gateway_location():
+    """Return (lat, lon) of the gateway, or None if unknown"""
+    if GATEWAY_LAT and GATEWAY_LON:
+        return float(GATEWAY_LAT), float(GATEWAY_LON)
+    try:
+        with urllib.request.urlopen("http://ip-api.com/json/?fields=status,lat,lon", timeout=5) as r:
+            loc = json.loads(r.read().decode())
+        if loc.get("status") == "success":
+            return float(loc["lat"]), float(loc["lon"])
+    except Exception:
+        pass
+    return None
+
 class LivestockGateway:
     def __init__(self):
         self.packet_count = 0
@@ -74,6 +96,7 @@ class LivestockGateway:
         
         self.init_lora()
         self.init_database()
+        self.gateway_location = get_gateway_location()
         self.print_header()
     
     def write_reg(self, addr, value):
@@ -131,6 +154,10 @@ class LivestockGateway:
         # Low data rate optimization
         self.write_reg(REG_MODEM_CONFIG_3, 0x0C)
         print("   ✓ Low data rate optimization: ON")
+
+        # LNA: max gain + boost (same as Arduino LoRa library)
+        self.write_reg(REG_LNA, 0x23)
+        print("   ✓ LNA boost: ON")
         
         # Sync word
         self.write_reg(0x39, 0x12)
@@ -205,9 +232,16 @@ class LivestockGateway:
         
         if irq & 0x40:  # RxDone
             time.sleep(0.005)
-            
+
+            # Drop packets that failed the CRC check (corrupted over the air)
+            if irq & 0x20:
+                print("   ⚠️  CRC error - packet dropped")
+                self.write_reg(REG_IRQ_FLAGS, 0xFF)
+                self.write_reg(REG_FIFO_ADDR_PTR, 0x00)
+                return None, None, None
+
             # Get packet info
-            current_addr = self.read_reg(REG_FIFO_RX_BASE)
+            current_addr = self.read_reg(REG_FIFO_RX_CURRENT_ADDR)
             length = self.read_reg(REG_RX_NB_BYTES)
             
             # Validate length
@@ -225,7 +259,7 @@ class LivestockGateway:
                 payload.append(self.read_reg(REG_FIFO))
             
             # Get signal info
-            rssi = self.read_reg(REG_PKT_RSSI_VALUE) - 157
+            rssi = self.read_reg(REG_PKT_RSSI_VALUE) - 164  # 164 for 433 MHz (LF port)
             snr_raw = self.read_reg(REG_PKT_SNR_VALUE)
             snr = snr_raw / 4.0 if snr_raw < 128 else (snr_raw - 256) / 4.0
             
@@ -650,12 +684,12 @@ class LivestockGateway:
                 cursor = conn.cursor()
                 
                 cursor.execute('''INSERT INTO livestock_readings 
-                    (device_id, latitude, longitude, satellites, temperature, ambient_temperature, humidity, heart_rate,
+                    (device_id, latitude, longitude, satellites, temperature, ambient_temperature, body_temperature, humidity, heart_rate,
                      accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z,
                      motion_magnitude, rotation_speed, battery, rssi, snr, timestamp, received_time)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                     (data['device_id'], data['latitude'], data['longitude'], data['satellites'],
-                     data['body_temperature'], data['ambient_temperature'], data['humidity'], data['heart_rate'],
+                     data['body_temperature'], data['ambient_temperature'], data['body_temperature'], data['humidity'], data['heart_rate'],
                      data['accel_x'], data['accel_y'], data['accel_z'],
                      data['gyro_x'], data['gyro_y'], data['gyro_z'],
                      motion, rotation, data['battery'], rssi, snr,
@@ -678,53 +712,10 @@ class LivestockGateway:
             except Exception as e:
                 print(f"❌ Unexpected error saving to DB: {e}")
                 break
-        
-        # Also send to FastAPI dashboard for WebSocket updates
-        self.send_to_dashboard(data, rssi, snr, motion, rotation)
 
-    
-    def send_to_dashboard(self, data, rssi, snr, motion, rotation):
-        """Send reading to FastAPI dashboard via HTTP"""
-        try:
-            payload = {
-                'device_id': data['device_id'],
-                'timestamp': data['timestamp'],
-                'temperature': data['body_temperature'],        # Map Body Temp to 'temperature' for compatibility
-                'ambient_temperature': data['ambient_temperature'],
-                'body_temperature': data['body_temperature'],
-                'heart_rate': data['heart_rate'],
-                'battery': data['battery'],
-                'latitude': data['latitude'],
-                'longitude': data['longitude'],
-                'humidity': data['humidity'],
-                'accel_x': data['accel_x'],
-                'accel_y': data['accel_y'],
-                'accel_z': data['accel_z'],
-                'gyro_x': data['gyro_x'],
-                'gyro_y': data['gyro_y'],
-                'gyro_z': data['gyro_z'],
-                'rotation_speed': rotation,
-                'motion_magnitude': motion,
-                'rssi': rssi
-            }
-            
-            # Send to local FastAPI endpoint
-            response = requests.post(
-                'http://localhost:8000/api/ingest/reading',
-                json=payload,
-                timeout=2
-            )
-            
-            if response.status_code == 200:
-                print(f"   📡 Sent to dashboard ✓")
-            else:
-                print(f"   ⚠️  Dashboard response: {response.status_code}")
-        
-        except requests.exceptions.ConnectionError:
-            print(f"   ⚠️  Dashboard not reachable (is FastAPI running?)")
-        except Exception as e:
-            print(f"   ⚠️  Error sending to dashboard: {e}")
-    
+        # No HTTP post to the dashboard: its LoRa monitor reads new rows from this
+        # DB and broadcasts them. Posting as well saved every packet twice.
+
     def detect_anomalies(self, d):
         """Detect anomalies with improved logic"""
         anomalies = []
@@ -826,6 +817,9 @@ class LivestockGateway:
                 if payload:
                     try:
                         data = self.parse_packet(payload)
+                        # No GPS fix: use the gateway's location (satellites stays 0)
+                        if data['latitude'] == 0.0 and data['longitude'] == 0.0 and self.gateway_location:
+                            data['latitude'], data['longitude'] = self.gateway_location
                         self.display_data(data, rssi, snr)
                         self.save_to_database(data, rssi, snr)
                         

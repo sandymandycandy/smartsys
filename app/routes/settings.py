@@ -120,7 +120,7 @@ async def test_email(
 ):
     """Send a test email"""
     try:
-        subject = "🐄 Smart Pastoralism - Test Email"
+        subject = "PawTrack test email"
         html_body = """
         <!DOCTYPE html>
         <html>
@@ -128,7 +128,7 @@ async def test_email(
             <style>
                 body { font-family: Arial, sans-serif; background-color: #f3f4f6; padding: 20px; }
                 .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-                .header { background: #3B82F6; color: white; padding: 20px; text-align: center; }
+                .header { background: #3F7D2A; color: white; padding: 20px; text-align: center; }
                 .content { padding: 30px; }
                 .footer { background: #f3f4f6; padding: 15px; text-align: center; font-size: 12px; color: #6b7280; }
             </style>
@@ -140,7 +140,7 @@ async def test_email(
                 </div>
                 <div class="content">
                     <h2>Email notifications are working correctly</h2>
-                    <p>This is a test email from your Smart Pastoralism monitoring system.</p>
+                    <p>This is a test email from your PawTrack monitoring system.</p>
                     <p>You will receive alerts for:</p>
                     <ul>
                         <li>🌡️ Critical temperature warnings</li>
@@ -151,7 +151,7 @@ async def test_email(
                     <p><strong>System Status:</strong> All systems operational ✓</p>
                 </div>
                 <div class="footer">
-                    <p>Smart Pastoralism Monitoring System</p>
+                    <p>PawTrack Monitoring System</p>
                     <p>This is an automated test email.</p>
                 </div>
             </div>
@@ -160,12 +160,12 @@ async def test_email(
         """
         
         text_body = """
-        SMART PASTORALISM - TEST EMAIL
+        PAWTRACK - TEST EMAIL
         ===============================
         
         ✅ Email notifications are working correctly!
         
-        This is a test email from your Smart Pastoralism monitoring system.
+        This is a test email from your PawTrack monitoring system.
         
         You will receive alerts for:
         - Critical temperature warnings
@@ -176,7 +176,7 @@ async def test_email(
         System Status: All systems operational ✓
         
         --
-        Smart Pastoralism Monitoring System
+        PawTrack Monitoring System
         """
         
         success = email_service.send_email(email, subject, html_body, text_body)
@@ -243,7 +243,7 @@ async def test_email(request: Request, _: bool = Depends(require_auth)):
     test_alert = {
         'alert_type': 'TEST_ALERT',
         'device_id': 'TEST-001',
-        'alert_message': 'This is a test notification from Smart Pastoralism system.',
+        'alert_message': 'This is a test notification from PawTrack system.',
         'temperature': 38.5,
         'heart_rate': 72,
         'battery': 85,

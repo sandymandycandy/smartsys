@@ -26,7 +26,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app/static")), name="
 templates = Jinja2Templates(directory=str(BASE_DIR / "app/templates"))
 
 # Import and include routers
-from app.routes import dashboard, api, auth, export, ml_api, milk, farms
+from app.routes import dashboard, api, auth, export, ml_api, farms
 from app.routes import settings as settings_routes
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
@@ -35,7 +35,7 @@ app.include_router(api.router,prefix="/api", tags=["API"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
 app.include_router(ml_api.router, prefix="/api", tags=["ML & AI"])
 app.include_router(settings_routes.router, prefix="/settings", tags=["Settings"])
-app.include_router(milk.router, prefix="/milk", tags=["Milk Production"])
+# Milk Production feature removed from the app
 app.include_router(farms.router, prefix="/farms", tags=["Farm Management"])
 
 # Check if we are running on Vercel

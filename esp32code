@@ -19,12 +19,16 @@
 #define LORA_IRQ 26
 #define LORA_FREQ 433E6
 
-// I2C pins
+// I2C pins (AXP2101 is on these default pins)
 #define I2C_SDA 21
 #define I2C_SCL 22
 
+// MPU6050 Pins (Secondary I2C)
+#define MPU_SDA 13
+#define MPU_SCL 14
+
 // Sensor pins
-#define DHT_PIN 13        // DHT11 - Ambient temp/humidity
+#define DHT_PIN 25        // Moved to 25 to free up 13
 #define DS18B20_PIN 4     // DS18B20 - Body temperature
 #define PULSE_PIN 15
 
@@ -69,23 +73,19 @@ void setup() {
   delay(2000);
   
   Serial.println("\n╔═══════════════════════════════════════╗");
-  Serial.println("║ T-BEAM V1.2 - DUAL TEMP SENSORS     ║");
-  Serial.println("║ DHT11 + DS18B20 System ✓             ║");
+  Serial.println("║ T-BEAM V1.2 - SMART PASTORALISM     ║");
+  Serial.println("║ GPS + LoRa + Temp + HR + MPU        ║");
   Serial.println("╚═══════════════════════════════════════╝\n");
   
-  // Initialize I2C with timeout protection for T-Beam v1.2
+  // Initialize I2C Bus 0 (AXP2101)
   Wire.begin(I2C_SDA, I2C_SCL);
-  Wire.setTimeout(1000);  // Increase timeout to 1000ms (prevents timeout errors)
-  Wire.setClock(100000);  // Reduce to 100kHz for stability (was 400kHz)
+  Wire.setClock(400000);
+
+  // Initialize I2C Bus 1 (MPU6050)
+  Wire1.begin(MPU_SDA, MPU_SCL);
+  Wire1.setClock(400000);
   
-  // AXP2101 PMU - DISABLED (causes I2C timeout errors on some T-Beam boards)
-  // Using fixed battery level instead
-  Serial.println("[0/6] AXP2101 PMU... ✗ Disabled (using fixed 50% battery)");
-  hasAXP2101 = false;
-  
-  /*
-  // Uncomment if you want to try detecting AXP2101
-  delay(300);
+  // Check for AXP2101 on Wire
   Serial.print("[0/6] AXP2101 PMU... ");
   Wire.beginTransmission(AXP2101_ADDR);
   if (Wire.endTransmission() == 0) {
@@ -93,10 +93,9 @@ void setup() {
     hasAXP2101 = true;
     initAXP2101();
   } else {
-    Serial.println("✗ Not found (using fallback battery)");
+    Serial.println("✗ Not found");
     hasAXP2101 = false;
   }
-  */
   
   // 1. GPS
   Serial.print("[1/6] GPS... ");
@@ -123,13 +122,13 @@ void setup() {
   LoRa.disableInvertIQ();
   Serial.println("✓");
   
-  // 3. MPU6050
-  Serial.print("[3/6] MPU6050... ");
+  // 3. MPU6050 on Wire1
+  Serial.print("[3/6] MPU6050 (Wire1)... ");
   delay(100);
-  Wire.beginTransmission(MPU6050_ADDR);
-  Wire.write(MPU6050_PWR_MGMT_1);
-  Wire.write(0);
-  Wire.endTransmission();
+  Wire1.beginTransmission(MPU6050_ADDR);
+  Wire1.write(MPU6050_PWR_MGMT_1);
+  Wire1.write(0);
+  Wire1.endTransmission();
   delay(100);
   Serial.println("✓");
   
@@ -262,22 +261,22 @@ void loop() {
     }
     Serial.printf("❤️  Heart Rate: %d BPM\n", beatsPerMinute);
     
-    // MPU6050
+    // MPU6050 using Wire1
     float ax = 0, ay = 0, az = 0, gx = 0, gy = 0, gz = 0;
     
-    Wire.beginTransmission(MPU6050_ADDR);
-    Wire.write(MPU6050_ACCEL_XOUT_H);
-    if (Wire.endTransmission(false) == 0) {
-      Wire.requestFrom((uint8_t)MPU6050_ADDR, (uint8_t)14);
+    Wire1.beginTransmission(MPU6050_ADDR);
+    Wire1.write(MPU6050_ACCEL_XOUT_H);
+    if (Wire1.endTransmission(false) == 0) {
+      Wire1.requestFrom((uint8_t)MPU6050_ADDR, (uint8_t)14);
       
-      if (Wire.available() >= 14) {
-        int16_t axRaw = (Wire.read() << 8) | Wire.read();
-        int16_t ayRaw = (Wire.read() << 8) | Wire.read();
-        int16_t azRaw = (Wire.read() << 8) | Wire.read();
-        Wire.read(); Wire.read(); // Skip temp
-        int16_t gxRaw = (Wire.read() << 8) | Wire.read();
-        int16_t gyRaw = (Wire.read() << 8) | Wire.read();
-        int16_t gzRaw = (Wire.read() << 8) | Wire.read();
+      if (Wire1.available() >= 14) {
+        int16_t axRaw = (Wire1.read() << 8) | Wire1.read();
+        int16_t ayRaw = (Wire1.read() << 8) | Wire1.read();
+        int16_t azRaw = (Wire1.read() << 8) | Wire1.read();
+        Wire1.read(); Wire1.read(); // Skip temp
+        int16_t gxRaw = (Wire1.read() << 8) | Wire1.read();
+        int16_t gyRaw = (Wire1.read() << 8) | Wire1.read();
+        int16_t gzRaw = (Wire1.read() << 8) | Wire1.read();
         
         ax = axRaw / 16384.0;
         ay = ayRaw / 16384.0;
@@ -389,7 +388,7 @@ uint8_t readAXP2101Register(uint8_t reg) {
   Wire.beginTransmission(AXP2101_ADDR);
   Wire.write(reg);
   Wire.endTransmission(false);
-  Wire.requestFrom(AXP2101_ADDR, (uint8_t)1);
+  Wire.requestFrom((uint8_t)AXP2101_ADDR, (uint8_t)1);
   return Wire.read();
 }
 
@@ -476,49 +475,3 @@ int getBatteryLevel() {
   
   return percentage;
 }
-```
-
----
-
-## 📚 Required Arduino Libraries
-
-You need to install **one additional library**:
-
-### **In Arduino IDE:**
-1. Go to **Sketch** → **Include Library** → **Manage Libraries**
-2. Search and install:
-   - ✅ `DallasTemperature` by Miles Burton
-   - ✅ `OneWire` by Paul Stoffregen (dependency)
-
-*You already have the other libraries (TinyGPS++, LoRa, DHT, Wire)*
-
----
-
-## 🎯 How It Works Now
-
-### **Dual Temperature System:**
-1. **DHT11 (GPIO 13)** → Measures **ambient** conditions
-   - Room/outdoor temperature
-   - Humidity levels
-   - Environmental monitoring
-
-2. **DS18B20 (GPIO 4)** → Measures **body** temperature
-   - Direct contact with animal's skin
-   - Accurate core temperature
-   - Fever detection
-
----
-
-## 📊 Updated Packet Format
-
-**New format** (16 fields now):
-```
-START:COW001,lat,lon,sats,ambient_temp,humidity,BODY_TEMP,hr,ax,ay,az,gx,gy,gz,battery,timestamp:END
-```
-
-**Example:**
-```
-START:COW001,13.082680,80.270718,8,28.5,65.0,38.7,65,0.012,-0.034,0.982,1.23,-0.45,0.89,87,123456:END
-                                      ^^^^^  ^^^^^  ^^^^
-                                      Ambient Body   HR
-                                      (DHT11) (DS18B20)

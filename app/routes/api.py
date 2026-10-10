@@ -155,7 +155,7 @@ def get_readings(
             query += " AND received_time <= ?"
             params.append(end_time)
         
-        query += " ORDER BY timestamp DESC LIMIT ?"
+        query += " ORDER BY id DESC LIMIT ?"
         params.append(limit)
         
         cursor.execute(query, params)
@@ -182,7 +182,7 @@ def get_animals_summary():
                 AVG(temperature) as avg_temp,
                 AVG(heart_rate) as avg_hr,
                 AVG(battery) as avg_battery,
-                MAX(timestamp) as last_seen
+                MAX(received_time) as last_seen
             FROM livestock_readings
             GROUP BY device_id
         ''')
@@ -431,11 +431,11 @@ def get_current_locations():
                 (SELECT COUNT(*) FROM alerts WHERE device_id = l1.device_id AND resolved = 0) as alert_count
             FROM livestock_readings l1
             INNER JOIN (
-                SELECT device_id, MAX(timestamp) as max_time
+                SELECT device_id, MAX(id) as max_id
                 FROM livestock_readings
                 WHERE latitude != 0 AND longitude != 0
                 GROUP BY device_id
-            ) l2 ON l1.device_id = l2.device_id AND l1.timestamp = l2.max_time
+            ) l2 ON l1.id = l2.max_id
         ''')
         
         locations = [dict(row) for row in cursor.fetchall()]

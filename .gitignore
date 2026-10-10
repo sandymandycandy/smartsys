@@ -53,3 +53,6 @@ build/
 # Temporary files
 *.tmp
 temp/
+
+# Local database backups
+*.db.backup-*

@@ -1,98 +1,124 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}Alerts - Smart Pastoralism{% endblock %}
+{% block title %}Alerts · PawTrack{% endblock %}
 
 {% block page_content %}
-<div>
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">🔔 Alerts</h1>
-        <p class="mt-2 text-sm text-gray-600">System alerts and notifications</p>
-    </div>
-
-    {% if alerts %}
-    <div class="space-y-4">
-        {% for alert in alerts %}
-        <div class="bg-white rounded-lg shadow-lg p-6 {% if 'CRITICAL' in alert.alert_type %}border-l-4 border-red-500{% elif 'WARNING' in alert.alert_type %}border-l-4 border-yellow-500{% else %}border-l-4 border-blue-500{% endif %}">
-            <div class="flex items-start justify-between">
-                <div class="flex-1">
-                    <div class="flex items-center space-x-3">
-                        <span class="text-2xl">
-                            {% if 'CRITICAL' in alert.alert_type %}
-                                🚨
-                            {% elif 'WARNING' in alert.alert_type %}
-                                ⚠️
-                            {% else %}
-                                ℹ️
-                            {% endif %}
-                        </span>
-                        <div>
-                            <span class="font-bold text-lg">{{ alert.alert_type }}</span>
-                            <span class="mx-2 text-gray-400">•</span>
-                            <span class="text-gray-700">{{ alert.device_id }}</span>
-                        </div>
-                    </div>
-                    
-                    <p class="mt-3 text-gray-700">{{ alert.alert_message }}</p>
-                    
-                    <div class="mt-3 flex space-x-6 text-sm text-gray-600">
-                        {% if alert.temperature %}
-                        <span>🌡️ {{ "%.1f"|format(alert.temperature) }}°C</span>
-                        {% endif %}
-                        {% if alert.heart_rate %}
-                        <span>❤️ {{ alert.heart_rate }} BPM</span>
-                        {% endif %}
-                        {% if alert.battery %}
-                        <span>🔋 {{ alert.battery }}%</span>
-                        {% endif %}
-                        <span>🕐 {{ alert.alert_time }}</span>
-                    </div>
-                </div>
-                
-                <div class="ml-6 flex flex-col space-y-2">
-                    {% if not alert.resolved %}
-                    <span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">
-                        Active
-                    </span>
-                    <button onclick="resolveAlert({{ alert.id }})" 
-                            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
-                        Resolve
-                    </button>
-                    {% else %}
-                    <span class="px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-800">
-                        Resolved
-                    </span>
-                    {% endif %}
-                    
-                    <a href="/dashboard/animals/{{ alert.device_id }}" 
-                       class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm text-center">
-                        View Animal
-                    </a>
-                </div>
-            </div>
+<div x-data="alertsPage()">
+    <header class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-7">
+        <div>
+            <p class="fk-eyebrow">Alerts</p>
+            <h1 class="fk-h1 mt-2" x-show="openCount > 0">
+                <span x-text="openCount"></span> <span x-text="openCount === 1 ? 'alert is' : 'alerts are'"></span> open
+            </h1>
+            <h1 class="fk-h1 mt-2" x-show="openCount === 0" x-cloak>All clear. Nice work, team.</h1>
+            <p class="fk-muted mt-2" x-show="criticalCount > 0">
+                <span x-text="criticalCount"></span> critical. Start with those.
+            </p>
         </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="bg-white rounded-lg shadow-lg p-12 text-center">
-        <span class="text-6xl">✅</span>
-        <h3 class="mt-4 text-xl font-semibold text-gray-900">No Alerts</h3>
-        <p class="mt-2 text-gray-600">All animals are healthy!</p>
-    </div>
-    {% endif %}
+        <div class="flex gap-3">
+            <label class="relative sm:w-64 flex-1">
+                <span class="sr-only">Search alerts</span>
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 fk-muted-2">{{ icon('search', 'w-4 h-4') }}</span>
+                <input x-model="query" type="search" class="fk-input pl-9" placeholder="Animal, farm, condition">
+            </label>
+            <label class="sm:w-44">
+                <span class="sr-only">Severity</span>
+                <select x-model="severity" class="fk-input">
+                    <option value="">Any severity</option>
+                    <option value="critical">Critical</option>
+                    <option value="warning">Warning</option>
+                    <option value="info">Info</option>
+                </select>
+            </label>
+        </div>
+    </header>
+
+    <section class="fk-card">
+        <div class="fk-tabs px-3 pt-1" role="tablist">
+            <template x-for="t in tabs" :key="t.id">
+                <button class="fk-tab" role="tab" :aria-selected="tab === t.id" @click="tab = t.id">
+                    <span x-text="t.label"></span><span class="fk-count" x-text="countFor(t.id)"></span>
+                </button>
+            </template>
+        </div>
+
+        <ul x-show="rows.length">
+            <template x-for="al in rows" :key="al.id">
+                <li class="fk-alert flex flex-col sm:flex-row sm:items-center gap-3" :class="'sev-' + (al.resolved ? 'none' : al.severity)">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <p class="font-semibold" x-text="al.condition"></p>
+                            <span class="fk-tag" :class="al.resolved ? 'fk-tag-plain' : al.severity === 'critical' ? 'fk-tag-emerg' : al.severity === 'warning' ? 'fk-tag-prog' : 'fk-tag-recov'"
+                                x-text="al.resolved ? 'Resolved' : al.severity === 'critical' ? 'Critical' : al.severity === 'warning' ? 'Warning' : 'Info'"></span>
+                        </div>
+                        <p class="text-sm fk-muted mt-1">
+                            <a :href="'/dashboard/animals/' + al.device_id" class="font-semibold hover:underline" x-text="al.name || al.device_id" @click.stop></a>
+                            <span class="fk-mono text-xs fk-muted-2" x-text="al.name ? ' ' + al.device_id : ''"></span>
+                            <span x-show="al.farm" x-text="' · ' + al.farm"></span>
+                        </p>
+                        <p class="fk-mono text-[11px] fk-muted-2 mt-1">
+                            <span x-text="al.since + ' ago'"></span><span x-show="al.temperature" x-text="' · ' + (al.temperature ? al.temperature.toFixed(1) : '') + '°C'"></span><span x-show="al.heart_rate" x-text="' · ' + al.heart_rate + ' bpm'"></span><span x-show="al.battery != null" x-text="' · battery ' + al.battery + '%'"></span>
+                        </p>
+                    </div>
+                    <div class="flex gap-2 sm:flex-none">
+                        <a class="fk-btn fk-btn-quiet fk-btn-sm" :href="'/dashboard/animals/' + al.device_id">View animal</a>
+                        <button class="fk-btn fk-btn-ghost fk-btn-sm" x-show="!al.resolved" @click="resolve(al)" :disabled="al.busy">
+                            {{ icon('check', 'w-4 h-4') }}Resolve
+                        </button>
+                    </div>
+                </li>
+            </template>
+        </ul>
+
+        <div class="px-5 py-14 text-center" x-show="!rows.length" x-cloak>
+            <span class="inline-flex w-11 h-11 rounded-full items-center justify-center" style="background:var(--brand-tint);color:var(--brand)">{{ icon('check', 'w-5 h-5') }}</span>
+            <p class="font-semibold mt-3" x-text="tab === 'open' && !query && !severity ? 'All clear. Nice work, team.' : 'Nothing matches those filters.'"></p>
+        </div>
+    </section>
 </div>
 
 <script>
-async function resolveAlert(alertId) {
-    try {
-        const response = await fetch(`/api/alerts/${alertId}/resolve`, {
-            method: 'POST'
-        });
-        if (response.ok) {
-            location.reload();
-        }
-    } catch (error) {
-        console.error('Error resolving alert:', error);
+    var FK_ALERTS = {{ alerts | tojson }};
+
+    function alertsPage() {
+        return {
+            alerts: FK_ALERTS.map(function (a) { return Object.assign({ busy: false }, a); }),
+            tab: 'open',
+            query: '',
+            severity: '',
+            tabs: [{ id: 'open', label: 'Open' }, { id: 'resolved', label: 'Resolved' }, { id: 'all', label: 'All' }],
+            get openCount() { return this.alerts.filter(function (a) { return !a.resolved; }).length; },
+            get criticalCount() { return this.alerts.filter(function (a) { return !a.resolved && a.severity === 'critical'; }).length; },
+            inTab: function (a, id) { return id === 'all' || (id === 'open' ? !a.resolved : !!a.resolved); },
+            filtered: function (id) {
+                var q = this.query.trim().toLowerCase(), sev = this.severity, self = this;
+                return this.alerts.filter(function (a) {
+                    if (!self.inTab(a, id)) return false;
+                    if (sev && a.severity !== sev) return false;
+                    if (!q) return true;
+                    return [a.device_id, a.name, a.farm, a.condition].join(' ').toLowerCase().indexOf(q) !== -1;
+                });
+            },
+            get rows() {
+                var rank = { critical: 0, warning: 1, info: 2 };
+                return this.filtered(this.tab).slice().sort(function (a, b) {
+                    if (!!a.resolved !== !!b.resolved) return a.resolved ? 1 : -1;
+                    if (!a.resolved && rank[a.severity] !== rank[b.severity]) return rank[a.severity] - rank[b.severity];
+                    return a.alert_time < b.alert_time ? 1 : -1;
+                });
+            },
+            countFor: function (id) { return this.filtered(id).length; },
+            resolve: function (al) {
+                al.busy = true;
+                fetch('/api/alerts/' + al.id + '/resolve', { method: 'POST' }).then(function (r) {
+                    if (r.ok) {
+                        al.resolved = 1;
+                        if (window.fkRefreshAlertCount) window.fkRefreshAlertCount();
+                    }
+                }).finally(function () { al.busy = false; });
+            }
+        };
     }
-}
 </script>
 {% endblock %}

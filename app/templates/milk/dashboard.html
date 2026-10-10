@@ -1,12 +1,12 @@
 {% extends "dashboard-base.html" %}
 
-{% block title %}Milk Production Dashboard - Smart Pastoralism{% endblock %}
+{% block title %}Milk Production Dashboard - PawTrack{% endblock %}
 
 {% block page_content %}
 <div x-data="milkDashboard" x-init="init()">
     <div class="mb-8 flex items-center justify-between">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900">🥛 Milk Production Dashboard</h1>
+            <h1 class="text-3xl font-bold text-gray-900">Milk Production Dashboard</h1>
             <p class="mt-2 text-sm text-gray-600">Track and analyze daily milk yield across your herd</p>
         </div>
         <div class="flex gap-3">
@@ -37,7 +37,7 @@
                     <p class="text-blue-100 text-sm font-medium">Today's Total</p>
                     <p class="text-3xl font-bold mt-1" x-text="(summary.today_total || 0).toFixed(1) + ' L'"></p>
                 </div>
-                <span class="text-4xl opacity-80">🥛</span>
+                
             </div>
         </div>
 
@@ -47,7 +47,7 @@
                     <p class="text-green-100 text-sm font-medium">7-Day Average</p>
                     <p class="text-3xl font-bold mt-1" x-text="(summary.week_avg || 0).toFixed(1) + ' L'"></p>
                 </div>
-                <span class="text-4xl opacity-80">📊</span>
+                
             </div>
         </div>
 
@@ -57,7 +57,7 @@
                     <p class="text-purple-100 text-sm font-medium">Active Producers</p>
                     <p class="text-3xl font-bold mt-1" x-text="summary.active_producers || 0"></p>
                 </div>
-                <span class="text-4xl opacity-80">🐄</span>
+                
             </div>
         </div>
 
@@ -67,7 +67,7 @@
                     <p class="text-yellow-100 text-sm font-medium">Monthly Total</p>
                     <p class="text-3xl font-bold mt-1" x-text="(summary.month_total || 0).toFixed(0) + ' L'"></p>
                 </div>
-                <span class="text-4xl opacity-80">📅</span>
+                
             </div>
         </div>
     </div>
@@ -75,7 +75,7 @@
     <!-- Production Trend Chart -->
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-semibold">📈 Production Trend (Last 30 Days)</h2>
+            <h2 class="text-xl font-semibold">Production Trend (Last 30 Days)</h2>
             <select x-model="trendDays" @change="loadData()"
                 class="border rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500">
                 <option value="7">Last 7 Days</option>
@@ -90,7 +90,7 @@
 
     <!-- Top Producers Table -->
     <div class="bg-white rounded-lg shadow-lg p-6">
-        <h3 class="text-lg font-semibold mb-4">🏆 Top Producers (Last 30 Days)</h3>
+        <h3 class="text-lg font-semibold mb-4">Top Producers (Last 30 Days)</h3>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
@@ -108,12 +108,12 @@
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="text-2xl"
-                                    x-text="index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1)"></span>
+                                    x-text="index === 0 ? '' : index === 1 ? '' : index === 2 ? '' : (index + 1)"></span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center">
                                     <span class="text-2xl mr-2"
-                                        x-text="producer.device_id.startsWith('SHEEP') ? '🐑' : '🐄'"></span>
+                                        x-text="producer.device_id.startsWith('SHEEP') ? '' : ''"></span>
                                     <span class="font-medium text-gray-900" x-text="producer.device_id"></span>
                                 </div>
                             </td>
@@ -208,8 +208,8 @@
                             datasets: [{
                                 label: 'Daily Yield (Liters)',
                                 data: this.dailyTrends.map(d => d.daily_yield),
-                                borderColor: '#3B82F6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderColor: '#3F7D2A',
+                                backgroundColor: 'rgba(63, 125, 42, 0.1)',
                                 tension: 0.4,
                                 fill: true,
                                 pointRadius: 4,

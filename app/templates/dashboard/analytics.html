@@ -1,464 +1,222 @@
 {% extends "dashboard-base.html" %}
+{% from 'components/icons.html' import icon %}
 
-{% block title %}Analytics - Smart Pastoralism{% endblock %}
+{% block title %}Health trends · PawTrack{% endblock %}
 
 {% block page_content %}
-<div x-data="analytics" x-init="init()">
-    <div class="mb-8 flex items-center justify-between">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900">📈 Analytics</h1>
-            <p class="mt-2 text-sm text-gray-600">Health trends, insights, and alert analytics</p>
-        </div>
+<header class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-7">
+    <div>
+        <p class="fk-eyebrow">Insights{% if t %} · {{ t.start.strftime('%d %b') }} to {{ t.end.strftime('%d %b %Y') }}{% endif %}</p>
+        <h1 class="fk-h1 mt-2">How the herd has been</h1>
+        {% if t %}
+        <p class="fk-muted mt-2">
+            {{ t.fever_pct }}% of readings ran warm (above 39.3°C), and {{ t.alert_sum.total }} alert{{ 's' if t.alert_sum.total != 1 }} were raised.
+            {% if t.stale_days > 1 %}<span class="fk-muted-2">The newest data is {{ t.stale_days }} days old, so periods count back from it.</span>{% endif %}
+        </p>
+        {% endif %}
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+        <nav class="fk-card flex p-1 gap-1" aria-label="Period">
+            {% for d, label in [(1, '24 hours'), (7, '7 days'), (30, '30 days')] %}
+            <a href="?days={{ d }}" class="px-3 h-9 inline-flex items-center rounded-md text-sm font-semibold {{ '' if t and t.days == d else 'fk-muted-2' }}"
+                {% if t and t.days == d %}style="background:var(--brand-tint);color:var(--brand-hover)" aria-current="page"{% endif %}>{{ label }}</a>
+            {% endfor %}
+        </nav>
         <div x-data="{ open: false }" class="relative">
-            <button @click="open = !open"
-                class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                </svg>
-                Export Data
-                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </button>
-            <div x-show="open" @click.away="open = false" x-cloak
-                class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-10 border border-gray-200"
-                style="display: none;">
-                <a href="/api/export/readings/csv"
-                    class="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">
-                    📊 All Readings (CSV)
-                </a>
-                <a href="/api/export/alerts/csv" class="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100">
-                    🔔 All Alerts (CSV)
-                </a>
-                <a href="/api/export/analytics/summary"
-                    class="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg">
-                    📈 Analytics Summary (CSV)
-                </a>
+            <button @click="open = !open" class="fk-btn fk-btn-ghost" :aria-expanded="open">Export</button>
+            <div x-show="open" @click.away="open = false" x-cloak class="fk-card absolute right-0 mt-2 w-56 z-20 py-1">
+                <a href="/api/export/readings/csv" class="block px-4 py-2.5 text-sm hover:bg-[#FBF8F1]">All readings (CSV)</a>
+                <a href="/api/export/alerts/csv" class="block px-4 py-2.5 text-sm hover:bg-[#FBF8F1]">All alerts (CSV)</a>
+                <a href="/api/export/analytics/summary" class="block px-4 py-2.5 text-sm hover:bg-[#FBF8F1]">Summary (CSV)</a>
             </div>
         </div>
     </div>
+</header>
 
-    <!-- Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-blue-100 text-sm font-medium">Total Alerts (30d)</p>
-                    <p class="text-3xl font-bold mt-1" x-text="alertSummary.total || 0"></p>
-                </div>
-                <span class="text-4xl opacity-80">🔔</span>
-            </div>
-        </div>
-        <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-red-100 text-sm font-medium">Active Alerts</p>
-                    <p class="text-3xl font-bold mt-1" x-text="alertSummary.active || 0"></p>
-                </div>
-                <span class="text-4xl opacity-80">🚨</span>
-            </div>
-        </div>
-        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-green-100 text-sm font-medium">Resolved</p>
-                    <p class="text-3xl font-bold mt-1" x-text="alertSummary.resolved || 0"></p>
-                </div>
-                <span class="text-4xl opacity-80">✅</span>
-            </div>
-        </div>
-        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-purple-100 text-sm font-medium">Resolution Rate</p>
-                    <p class="text-3xl font-bold mt-1" x-text="resolutionRate + '%'"></p>
-                </div>
-                <span class="text-4xl opacity-80">📊</span>
-            </div>
-        </div>
+{% if not t %}
+<div class="fk-card p-12 text-center">
+    <p class="fk-h2">No readings to chart yet.</p>
+    <p class="fk-muted mt-2">Trends appear once collars have reported for a while.</p>
+</div>
+{% else %}
+{% set hr = t.hr %}
+<section class="fk-card fk-kpis mb-7" aria-label="Period summary">
+    <div>
+        <p class="fk-eyebrow">Readings</p>
+        <p class="fk-kpi mt-3">{{ '{:,}'.format(t.readings.total) }}</p>
+        <p class="text-sm fk-muted-2 mt-2">from every collar in the period</p>
     </div>
-
-    <!-- Temperature Analytics -->
-    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-semibold">🌡️ Temperature Trends</h2>
-            <select x-model="tempDays" @change="loadTemperatureTrends()"
-                class="border rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500">
-                <option value="1">Last 24 Hours</option>
-                <option value="7" selected>Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-            </select>
-        </div>
-        <div style="position: relative; height: 300px;">
-            <canvas id="tempTrendChart"></canvas>
-        </div>
+    <div>
+        <p class="fk-eyebrow">Avg body temp</p>
+        <p class="fk-kpi mt-3">{{ t.avg_temp if t.avg_temp is not none else '--' }}<span class="text-xl align-top ml-0.5">°C</span></p>
+        <p class="text-sm fk-muted-2 mt-2">{{ t.fever_pct }}% of readings above 39.3°</p>
     </div>
-
-    <!-- Heart Rate & Alerts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <!-- Heart Rate Distribution -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold">❤️ Heart Rate Distribution</h3>
-                <select x-model="hrDays" @change="loadHeartRateAnalytics()"
-                    class="border rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500">
-                    <option value="1">Last 24 Hours</option>
-                    <option value="7" selected>Last 7 Days</option>
-                    <option value="30">Last 30 Days</option>
-                </select>
-            </div>
-            <div style="position: relative; height: 300px;">
-                <canvas id="hrDistChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Alert Frequency by Type -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold">🚨 Alerts by Type</h3>
-            </div>
-            <div style="position: relative; height: 300px;">
-                <canvas id="alertTypeChart"></canvas>
-            </div>
-        </div>
+    <div>
+        <p class="fk-eyebrow">Alerts raised</p>
+        <p class="fk-kpi mt-3">{{ t.alert_sum.total }}</p>
+        <p class="text-sm fk-muted-2 mt-2">{{ t.alert_sum.critical }} critical</p>
     </div>
-
-    <!-- Alert Trend Over Time -->
-    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-semibold">📅 Alert Trend (Last 30 Days)</h2>
-        </div>
-        <div style="position: relative; height: 300px;">
-            <canvas id="alertTrendChart"></canvas>
-        </div>
+    <div>
+        <p class="fk-eyebrow">Still open</p>
+        <p class="fk-kpi mt-3" {% if t.alert_sum.open %}style="color:var(--emerg)"{% endif %}>{{ t.alert_sum.open }}</p>
+        <p class="text-sm fk-muted-2 mt-2"><a href="/dashboard/alerts" class="font-semibold" style="color:var(--brand)">Go to alerts</a></p>
     </div>
+</section>
 
-    <!-- Top Alerting Devices -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
-        <h3 class="text-lg font-semibold mb-4">🐄 Top Alerting Animals</h3>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device ID</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Alerts</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Critical</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    <template x-for="device in topDevices" :key="device.device_id">
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <span class="text-2xl mr-2"
-                                        x-text="device.device_id.startsWith('SHEEP') ? '🐑' : '🐄'"></span>
-                                    <span class="font-medium text-gray-900" x-text="device.device_id"></span>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800"
-                                    x-text="device.alert_count"></span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800"
-                                    x-text="device.critical_count"></span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <a :href="'/dashboard/animals/' + device.device_id"
-                                    class="text-blue-600 hover:text-blue-800 font-medium">
-                                    View Details →
-                                </a>
-                            </td>
-                        </tr>
-                    </template>
-                    <template x-if="topDevices.length === 0">
-                        <tr>
-                            <td colspan="4" class="px-6 py-8 text-center text-gray-500">
-                                No alert data available
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-    </div>
+<div class="grid gap-7 lg:grid-cols-2 mb-7">
+    <section class="fk-card fk-card-pad" aria-labelledby="temp-h">
+        <h2 id="temp-h" class="fk-h2">Body temperature</h2>
+        <p class="text-sm fk-muted-2 mt-1">Herd average per {{ 'hour' if t.days == 1 else 'day' }}, with the day's lowest and highest reading shaded.</p>
+        <div class="relative h-64 mt-4"><canvas id="tempChart" role="img" aria-label="Average body temperature with daily range"></canvas></div>
+    </section>
+
+    <section class="fk-card fk-card-pad" aria-labelledby="hr-h">
+        <h2 id="hr-h" class="fk-h2">Heart rate</h2>
+        <p class="text-sm fk-muted-2 mt-1">Herd average per {{ 'hour' if t.days == 1 else 'day' }}. Normal is 48 to 75 bpm.</p>
+        <div class="relative h-64 mt-4"><canvas id="hrChart" role="img" aria-label="Average heart rate"></canvas></div>
+    </section>
 </div>
 
+<div class="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] mb-7">
+    <!-- Heart-rate bands -->
+    <section class="fk-card fk-card-pad" aria-labelledby="band-h">
+        <h2 id="band-h" class="fk-h2">Where heart rates landed</h2>
+        <p class="text-sm fk-muted-2 mt-1">Share of {{ '{:,}'.format(hr.total or 0) }} readings</p>
+        <ul class="mt-5 space-y-4">
+            {% for key, label, color in [('normal', 'Normal, 48 to 75', 'var(--brand)'), ('elevated', 'Elevated, 76 to 80', 'var(--prog)'), ('high', 'High, over 80', 'var(--emerg)'), ('low', 'Low, under 48', 'var(--recov)')] %}
+            {% set n = hr[key] or 0 %}
+            {% set pct = (100 * n / hr.total) if hr.total else 0 %}
+            <li>
+                <div class="flex items-baseline justify-between text-sm">
+                    <span class="font-semibold">{{ label }}</span>
+                    <span class="fk-mono text-xs"><b>{{ '%.0f'|format(pct) if pct >= 1 or pct == 0 else '<1' }}%</b> <span class="fk-muted-2">· {{ '{:,}'.format(n) }}</span></span>
+                </div>
+                <div class="fk-track mt-2"><div class="fk-fill" style="width: {{ pct|round(1) }}%; background: {{ color }}"></div></div>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    <!-- Alerts per day -->
+    <section class="fk-card fk-card-pad" aria-labelledby="ad-h">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <h2 id="ad-h" class="fk-h2">Alerts per day</h2>
+            <div class="flex items-center gap-4 text-xs fk-muted">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm" style="background:var(--prog)"></span>Warning</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm" style="background:var(--emerg)"></span>Critical</span>
+            </div>
+        </div>
+        <div class="relative h-64 mt-4"><canvas id="alertChart" role="img" aria-label="Warning and critical alerts per day"></canvas></div>
+    </section>
+</div>
+
+<section class="fk-card" aria-labelledby="top-h">
+    <div class="px-5 pt-5 pb-3"><h2 id="top-h" class="fk-h2">Animals with the most alerts</h2></div>
+    {% if t.top %}
+    <div class="overflow-x-auto border-t" style="border-color:var(--line)">
+        <table class="fk-table">
+            <thead><tr><th>Animal</th><th class="hidden md:table-cell">Farm</th><th class="text-right">Alerts</th><th class="text-right">Critical</th><th class="text-right">Open</th></tr></thead>
+            <tbody>
+                {% for a in t.top %}
+                <tr class="cursor-pointer" data-href="/dashboard/animals/{{ a.device_id|urlencode }}" onclick="window.location=this.dataset.href">
+                    <td><a href="/dashboard/animals/{{ a.device_id }}" class="font-semibold">{{ a.name or a.device_id }}</a><span class="block fk-mono text-[11px] fk-muted-2">{{ a.device_id }}</span></td>
+                    <td class="hidden md:table-cell fk-muted">{{ a.farm }}</td>
+                    <td class="text-right fk-mono text-[13px]">{{ a.total }}</td>
+                    <td class="text-right">{% if a.critical %}<span class="fk-tag fk-tag-emerg">{{ a.critical }}</span>{% else %}<span class="fk-mono text-[13px] fk-muted-2">0</span>{% endif %}</td>
+                    <td class="text-right fk-mono text-[13px]">{{ a.open }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="px-5 pb-6 fk-muted">No alerts in this period.</p>
+    {% endif %}
+</section>
+
 <script>
-    document.addEventListener('alpine:init', () => {
-        Alpine.data('analytics', () => {
-            // Define chart instances in the factory scope, NOT in the returned data object.
-            // This prevents Alpine from proxying the chart instances, which breaks Chart.js.
-            let tempChart = null;
-            let hrDistChart = null;
-            let alertTypeChart = null;
-            let alertTrendChart = null;
+    (function () {
+        if (!window.Chart) return;
+        var series = {{ t.series | tojson }};
+        var alerts = {{ t.alerts_by_day | tojson }};
+        var hourly = {{ 'true' if t.days == 1 else 'false' }};
 
+        function label(s) {
+            if (hourly) return s.slice(11, 16);
+            var d = new Date(s + 'T00:00:00');
+            return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+        }
+        var labels = series.map(function (s) { return label(s.t); });
+
+        function band(lo, hi) {
             return {
-                tempDays: 7,
-                hrDays: 7,
-                alertSummary: {},
-                topDevices: [],
-                resolutionRate: 0,
-
-                async init() {
-                    // Initialize charts immediately as library is loaded locally
-                    this.loadTemperatureTrends();
-                    this.loadHeartRateAnalytics();
-                    this.loadAlertAnalytics();
-                },
-
-                async loadTemperatureTrends() {
-                    try {
-                        const response = await fetch('/api/analytics/temperature?days=' + this.tempDays);
-                        const result = await response.json();
-
-                        var data = result.data;
-                        // Strict validation: must have data AND properly formatted entries
-                        if (!data || data.length === 0 || !data[0].avg_temp) {
-                            console.warn('API data invalid or empty, using demo data');
-                            data = this.generateDemoTempData();
-                        } else {
-                            console.log('Using API data:', data);
-                        }
-
-                        this.renderTempChart(data);
-                    } catch (error) {
-                        console.error('Error loading temperature trends:', error);
-                        const data = this.generateDemoTempData();
-                        this.renderTempChart(data);
-                    }
-                },
-
-                renderTempChart(data) {
-                    const ctxElement = document.getElementById('tempTrendChart');
-                    if (!ctxElement) return;
-
-                    if (tempChart) {
-                        tempChart.destroy();
-                    }
-
-                    tempChart = new Chart(ctxElement.getContext('2d'), {
-                        type: 'line',
-                        data: {
-                            labels: data.map(function (d) { return d.label || (d.hour ? d.hour.split(' ')[1] : ''); }),
-                            datasets: [{
-                                label: 'Average Temperature',
-                                data: data.map(function (d) { return d.avg_temp; }),
-                                borderColor: '#EF4444',
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                tension: 0.4,
-                                fill: true
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                y: {
-                                    beginAtZero: false,
-                                    suggestedMin: 36,
-                                    suggestedMax: 42
-                                }
-                            }
-                        }
-                    });
-                },
-
-                generateDemoTempData() {
-                    var data = [];
-                    for (var i = 0; i < 12; i++) {
-                        data.push({
-                            label: (8 + i * 2) + ':00',
-                            avg_temp: 38.2 + Math.random() * 0.8,
-                            max_temp: 38.8 + Math.random() * 0.6,
-                            min_temp: 37.8 + Math.random() * 0.4
-                        });
-                    }
-                    return data;
-                },
-
-                async loadHeartRateAnalytics() {
-                    try {
-                        const response = await fetch('/api/analytics/heartrate?days=' + this.hrDays);
-                        const result = await response.json();
-
-                        var distribution = result.distribution;
-                        if (!distribution || distribution.length === 0 || distribution.every(d => d.count === 0)) {
-                            distribution = this.getDemoHeartRateData();
-                        }
-
-                        this.renderHeartRateChart(distribution);
-                    } catch (error) {
-                        console.error('Error loading heart rate analytics:', error);
-                        const distribution = this.getDemoHeartRateData();
-                        this.renderHeartRateChart(distribution);
-                    }
-                },
-
-                getDemoHeartRateData() {
-                    return [
-                        { range: 'Low (<50)', count: 5 },
-                        { range: 'Normal (50-65)', count: 45 },
-                        { range: 'Elevated (66-75)', count: 25 },
-                        { range: 'High (76-85)', count: 15 },
-                        { range: 'Critical (>85)', count: 10 }
-                    ];
-                },
-
-                renderHeartRateChart(distribution) {
-                    const ctxElement = document.getElementById('hrDistChart');
-                    if (!ctxElement) return;
-
-                    if (hrDistChart) {
-                        hrDistChart.destroy();
-                    }
-
-                    const hrCtx = ctxElement.getContext('2d');
-                    const colors = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#7C3AED'];
-
-                    hrDistChart = new Chart(hrCtx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: distribution.map(d => d.range),
-                            datasets: [{
-                                data: distribution.map(d => d.count),
-                                backgroundColor: colors,
-                                borderWidth: 2,
-                                borderColor: '#ffffff'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { display: true, position: 'right' }
-                            }
-                        }
-                    });
-                },
-
-                async loadAlertAnalytics() {
-                    try {
-                        const response = await fetch('/api/analytics/alerts?days=30');
-                        const data = await response.json();
-                        this.processAlertData(data);
-                    } catch (error) {
-                        console.error('Error loading alert analytics:', error);
-                        this.processAlertData({}); // Trigger demo data
-                    }
-                },
-
-                processAlertData(data) {
-                    var summary = data.summary || {};
-                    var byType = data.by_type || [];
-                    var byDay = data.by_day || [];
-                    var byDevice = data.by_device || [];
-
-                    // Demo data check
-                    if (!summary.total) {
-                        summary = { total: 45, active: 8, resolved: 37 };
-                        this.resolutionRate = 82;
-
-                        byType = [
-                            { alert_type: 'TEMP_WARNING', count: 18 },
-                            { alert_type: 'TEMP_CRITICAL', count: 8 },
-                            { alert_type: 'HR_WARNING', count: 12 },
-                            { alert_type: 'HR_CRITICAL', count: 4 },
-                            { alert_type: 'BATTERY_LOW', count: 3 }
-                        ];
-
-                        byDevice = [
-                            { device_id: 'COW-001', alert_count: 12, critical_count: 3 },
-                            { device_id: 'COW-002', alert_count: 8, critical_count: 2 },
-                            { device_id: 'COW-003', alert_count: 6, critical_count: 1 }
-                        ];
-
-                        byDay = [];
-                        for (let i = 14; i >= 0; i--) {
-                            let d = new Date();
-                            d.setDate(d.getDate() - i);
-                            byDay.push({
-                                date: d.toISOString().split('T')[0],
-                                count: Math.floor(Math.random() * 8)
-                            });
-                        }
-                    }
-
-                    this.alertSummary = summary;
-                    this.topDevices = byDevice;
-                    if (summary.total > 0 && !this.resolutionRate) {
-                        this.resolutionRate = Math.round((summary.resolved / summary.total) * 100);
-                    }
-
-                    this.renderAlertCharts(byType, byDay);
-                },
-
-                renderAlertCharts(byType, byDay) {
-                    // Alert Type Chart
-                    const typeCtxElement = document.getElementById('alertTypeChart');
-                    if (typeCtxElement) {
-                        if (alertTypeChart) alertTypeChart.destroy();
-
-                        const typeColors = {
-                            'TEMP_CRITICAL': '#EF4444',
-                            'TEMP_WARNING': '#F59E0B',
-                            'HR_CRITICAL': '#DC2626',
-                            'HR_WARNING': '#FBBF24',
-                            'BATTERY_LOW': '#6B7280'
-                        };
-
-                        alertTypeChart = new Chart(typeCtxElement.getContext('2d'), {
-                            type: 'bar',
-                            data: {
-                                labels: byType.map(d => d.alert_type),
-                                datasets: [{
-                                    label: 'Count',
-                                    data: byType.map(d => d.count),
-                                    backgroundColor: byType.map(d => typeColors[d.alert_type] || '#3B82F6'),
-                                    borderRadius: 8
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: { legend: { display: false } },
-                                scales: { y: { beginAtZero: true } }
-                            }
-                        });
-                    }
-
-                    // Alert Trend
-                    const trendCtxElement = document.getElementById('alertTrendChart');
-                    if (trendCtxElement) {
-                        if (alertTrendChart) alertTrendChart.destroy();
-
-                        alertTrendChart = new Chart(trendCtxElement.getContext('2d'), {
-                            type: 'line',
-                            data: {
-                                labels: byDay.map(d => d.date),
-                                datasets: [{
-                                    label: 'Alerts',
-                                    data: byDay.map(d => d.count),
-                                    borderColor: '#EF4444',
-                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                    tension: 0.4,
-                                    fill: true
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: { legend: { display: false } },
-                                scales: { y: { beginAtZero: true } }
-                            }
-                        });
-                    }
+                id: 'normalBand',
+                beforeDatasetsDraw: function (chart) {
+                    var y = chart.scales.y, a = chart.chartArea, ctx = chart.ctx;
+                    var top = Math.max(a.top, y.getPixelForValue(hi)), bottom = Math.min(a.bottom, y.getPixelForValue(lo));
+                    if (bottom <= top) return;
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(63, 125, 42, 0.07)';
+                    ctx.fillRect(a.left, top, a.right - a.left, bottom - top);
+                    ctx.restore();
                 }
             };
+        }
+
+        var common = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { grid: { color: '#EAE3D5' }, border: { display: false } },
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkipPadding: 12 } }
+            }
+        };
+
+        new Chart(document.getElementById('tempChart'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Highest', data: series.map(function (s) { return s.max_temp; }), borderWidth: 0, pointRadius: 0, backgroundColor: 'rgba(63, 125, 42, 0.14)', fill: '+1' },
+                    { label: 'Lowest', data: series.map(function (s) { return s.min_temp; }), borderWidth: 0, pointRadius: 0, fill: false },
+                    { label: 'Average', data: series.map(function (s) { return s.avg_temp; }), borderColor: '#3F7D2A', backgroundColor: '#3F7D2A', pointRadius: 0, pointHoverRadius: 5, tension: 0.3 }
+                ]
+            },
+            options: Object.assign({}, common, {
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + c.parsed.y + ' °C'; } } } }
+            }),
+            plugins: [band(38.0, 39.3)]
         });
-    });
+
+        new Chart(document.getElementById('hrChart'), {
+            type: 'line',
+            data: { labels: labels, datasets: [{ label: 'Average', data: series.map(function (s) { return s.avg_hr; }), borderColor: '#3F7D2A', backgroundColor: '#3F7D2A', pointRadius: 0, pointHoverRadius: 5, tension: 0.3 }] },
+            options: Object.assign({}, common, {
+                plugins: { legend: { display: false }, tooltip: { displayColors: false, callbacks: { label: function (c) { return c.parsed.y + ' bpm'; } } } }
+            }),
+            plugins: [band(48, 75)]
+        });
+
+        new Chart(document.getElementById('alertChart'), {
+            type: 'bar',
+            data: {
+                labels: alerts.map(function (a) { return new Date(a.day + 'T00:00:00').toLocaleDateString([], { day: 'numeric', month: 'short' }); }),
+                datasets: [
+                    { label: 'Warning', data: alerts.map(function (a) { return a.warning; }), backgroundColor: '#B7791F', borderColor: '#FFFDF8', borderWidth: { top: 2 }, borderSkipped: false, borderRadius: 0, maxBarThickness: 28 },
+                    { label: 'Critical', data: alerts.map(function (a) { return a.critical; }), backgroundColor: '#C2410C', borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: false, maxBarThickness: 28 }
+                ]
+            },
+            options: Object.assign({}, common, {
+                scales: {
+                    x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 10, maxRotation: 0, autoSkipPadding: 10 } },
+                    y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#EAE3D5' }, border: { display: false } }
+                },
+                plugins: { legend: { display: false } }
+            })
+        });
+    })();
 </script>
+{% endif %}
 {% endblock %}

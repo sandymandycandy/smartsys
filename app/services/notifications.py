@@ -183,7 +183,7 @@ class NotificationService:
             subject = f"🚨 {alert_data.get('alert_type', 'Alert')} - {alert_data.get('device_id', 'Unknown')}"
             
             body_plain = f"""
-Smart Pastoralism Alert
+PawTrack Alert
 
 Device: {alert_data.get('device_id', 'Unknown')}
 Type: {alert_data.get('alert_type', 'Alert')}
@@ -201,7 +201,7 @@ Check dashboard for more details.
 <html>
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; text-align: center; color: white;">
-        <h1>🚨 Smart Pastoralism Alert</h1>
+        <h1>🚨 PawTrack Alert</h1>
     </div>
     <div style="padding: 20px; background: #f8f9fa;">
         <h2 style="color: #dc3545;">{alert_data.get('alert_type', 'Alert')}</h2>
